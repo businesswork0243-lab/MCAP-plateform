@@ -1,0 +1,15 @@
+{
+  "executionEnvironments": [
+    {
+      "root": "apps/ai-engine",
+      "extraPaths": [
+        "apps/ai-engine"
+      ]
+    }
+  ],
+  "extraPaths": [
+    "apps/ai-engine"
+  ],
+  "venvPath": "apps/ai-engine",
+  "venv": ".venv"
+}

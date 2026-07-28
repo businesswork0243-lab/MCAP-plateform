@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 load_dotenv()
 
 from agents import canonical_writer, platform_optimizer, brand_optimizer, humanizer, qa_agent
+from agents.rule_engine import RuleEngineOrchestrator
 from services.scoring import score as score_content
 from services.prompt_compiler import PDLRequest, compile as compile_prompt
 
@@ -296,6 +297,32 @@ async def run_qa(req: QARequest):
     except Exception as e:
         log.error("qa_agent failed: %s", e)
         raise HTTPException(status_code=500, detail="QA agent failed")
+
+class RuleEngineRequest(BaseModel):
+    content: str
+    user_prompt: str = ""
+    brandProfile: Optional[BrandProfile] = None
+    extra_context: Optional[dict] = None
+    request_id: Optional[str] = None
+
+@app.post("/agents/rule-engine")
+async def run_rule_engine(req: RuleEngineRequest):
+    try:
+        orchestrator = RuleEngineOrchestrator()
+        return await run_with_timeout(
+            orchestrator.process(
+                content=req.content,
+                user_prompt=req.user_prompt,
+                brand_data=req.brandProfile.as_dict() if req.brandProfile else None,
+                extra_context=req.extra_context,
+                request_id=req.request_id,
+            )
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("rule_engine failed: %s", e)
+        raise HTTPException(status_code=500, detail="Rule engine failed")
 
 class ScoreRequest(BaseModel):
     content: str
