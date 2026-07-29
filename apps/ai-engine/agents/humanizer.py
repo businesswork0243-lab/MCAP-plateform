@@ -2,11 +2,24 @@
 
 v2.0 — Aggressive false negative removal + deterministic cleanup pass.
 """
+import uuid
+import logging
 from services.llm import complete
 from services.text_cleaner import clean_ai_patterns, detect_all_patterns, detect_false_negatives
-import logging
+from agents.rule_engine.orchestrator import RuleEngineOrchestrator
+
+from typing import TypedDict
 
 log = logging.getLogger("ai-engine.humanizer")
+_rule_engine = RuleEngineOrchestrator()
+
+
+class IntensityRuleConfig(TypedDict):
+    description: str
+    rules: list[str]
+    temperature: float
+    second_pass: bool
+
 
 SYSTEM = """You are a master editor who transforms AI-generated content into naturally human prose.
 
@@ -156,9 +169,10 @@ BANNED_AI_PHRASES = [
     "We are excited to",
 ]
 
+
 # ─── Intensity Instructions ───────────────────────────────────────────────────
 
-INTENSITY_RULES = {
+INTENSITY_RULES: dict[str, IntensityRuleConfig] = {
     "light": {
         "description": "Minimal changes — surgical removal of AI tells only.",
         "rules": [
@@ -347,25 +361,23 @@ def _build_detection_block(content: str) -> str:
 async def run(
     content:       str,
     intensity:     str  = "medium",
-    tonality:      dict = None,
+    tonality:      dict | None = None,
     language:      str  = "English",
-    brand_phrases: list = None,
+    brand_phrases: list | None = None,
+    user_prompt:   str  = "",
+    brand_data:    dict | None = None,
+    extra_context: dict | None = None,
+    request_id:    str | None  = None,
 ) -> dict:
     """
-    Humanize content with aggressive false negative removal.
+    Humanize content with aggressive false negative removal + Rule Engine pass.
     
     Pipeline:
       1. Pre-scan for AI patterns (false negatives, cliches, buzzwords)
       2. LLM humanization with detection-aware prompt
       3. Deterministic cleanup pass (text_cleaner)
       4. Optional second pass if false negatives remain (medium/aggressive)
-    
-    Args:
-        content:       Text to humanize
-        intensity:     light | medium | aggressive
-        tonality:      Tonality spectrum dict (from content wizard)
-        language:      Output language
-        brand_phrases: Additional brand-banned phrases to include
+      5. Rule Engine pass (Agent 1 static/dynamic validation & Agent 2 loop)
     """
     # ── Validate intensity ────────────────────────────────────────────────────
     if intensity not in INTENSITY_RULES:
@@ -373,6 +385,9 @@ async def run(
         intensity = "medium"
 
     rules_config = INTENSITY_RULES[intensity]
+    rules_list = rules_config["rules"]
+    temp_val = rules_config["temperature"]
+    second_pass_enabled = rules_config["second_pass"]
 
     # ── Pre-scan for patterns ─────────────────────────────────────────────────
     pre_detections = detect_all_patterns(content)
@@ -386,7 +401,7 @@ async def run(
                 all_banned.append(phrase)
 
     banned_block = "\n".join(f"  • {p}" for p in all_banned)
-    rules_block  = "\n".join(f"  {i+1}. {r}" for i, r in enumerate(rules_config["rules"]))
+    rules_block  = "\n".join(f"  {i+1}. {r}" for i, r in enumerate(rules_list))
 
     # ── Tonality block ────────────────────────────────────────────────────────
     tonality_lines = []
@@ -427,7 +442,7 @@ async def run(
     )
 
     # ── Pass 1: LLM Humanization ──────────────────────────────────────────────
-    user_prompt = USER_TEMPLATE.format(
+    user_prompt_text = USER_TEMPLATE.format(
         content=content,
         intensity_upper=intensity.upper(),
         description=f"Goal: {rules_config['description']}",
@@ -440,8 +455,8 @@ async def run(
 
     humanized, tokens_p1 = await complete(
         SYSTEM,
-        user_prompt,
-        temperature=rules_config["temperature"],
+        user_prompt_text,
+        temperature=temp_val,
         max_tokens=max_tok,
     )
 
@@ -456,7 +471,7 @@ async def run(
     tokens_p2 = 0
     second_pass_run = False
 
-    if rules_config["second_pass"] and len(post_scan) > 0:
+    if second_pass_enabled and len(post_scan) > 0:
         log.info(
             "Second pass triggered | remaining_false_negs=%d",
             len(post_scan)
@@ -496,6 +511,63 @@ Output only the fixed text."""
 
         total_tokens += tokens_p2
 
+    # ── Rule Engine — always runs (SPEC COMPLIANT) ────────────────────────
+    rule_engine_meta: dict = {}
+
+    try:
+        req_id = request_id or str(uuid.uuid4())
+
+        # SPEC FIX: brand_data=None pe bhi chale
+        # Empty dict pass karo — Agent 3 minimal rules generate karega
+        safe_brand_data = brand_data or {}
+
+        re_result = await _rule_engine.process(
+            content=humanized,
+            user_prompt=user_prompt or content[:200],
+            brand_data=safe_brand_data,
+            extra_context=extra_context,
+            request_id=req_id,
+        )
+
+        humanized = re_result.final_content
+
+        static_val = re_result.static_validation
+        static_score = static_val.static_score if static_val else 0.0
+        dynamic_score = static_val.dynamic_score if static_val else 0.0
+        passed = static_val.passed if static_val else False
+        violations_count = len(static_val.violations) if static_val else 0
+        category_breakdown = static_val.category_breakdown if static_val else {}
+
+        rule_engine_meta = {
+            "enabled":                    True,
+            "final_score":                re_result.final_score,
+            "static_score":               static_score,
+            "dynamic_score":              dynamic_score,
+            "passed":                     passed,
+            "total_iterations":           re_result.total_iterations,
+            "false_negatives_eliminated": re_result.false_negatives_eliminated,
+            "dynamic_rules_generated":    len(re_result.dynamic_rules.rules),
+            "violations_remaining":       violations_count,
+            "category_breakdown":         category_breakdown,
+            "improvement_log":            re_result.improvement_log,
+            "processing_ms":              re_result.processing_time_ms,
+        }
+
+        log.info(
+            "Rule Engine complete | score=%.1f%% "
+            "(static=%.1f%%, dynamic=%.1f%%) | "
+            "passed=%s | iterations=%d",
+            re_result.final_score,
+            static_score,
+            dynamic_score,
+            passed,
+            re_result.total_iterations,
+        )
+
+    except Exception as e:
+        log.error("Rule Engine failed: %s", e)
+        rule_engine_meta = {"enabled": True, "error": str(e)}
+
     # ── Final metrics ─────────────────────────────────────────────────────────
     final_detections = detect_all_patterns(humanized)
     
@@ -531,5 +603,6 @@ Output only the fixed text."""
             "second_pass_run":      second_pass_run,
             "detections_before":    cleanup_result["detections"]["before"],
             "detections_after":     cleanup_result["detections"]["after"],
+            "rule_engine":          rule_engine_meta,
         },
     }

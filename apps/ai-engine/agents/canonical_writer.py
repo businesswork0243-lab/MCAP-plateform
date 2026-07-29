@@ -222,7 +222,7 @@ async def run(
     language:            str         = "English",
     word_count:          int | None  = None,
     special_instructions: str        = "",
-    tonality_spectrum:   dict        = None,
+    tonality_spectrum:   dict | None = None,
 ) -> dict:
     """
     Generate the canonical article.

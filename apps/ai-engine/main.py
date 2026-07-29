@@ -146,7 +146,7 @@ async def global_exception_handler(request: Request, exc: Exception):
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": "Internal server error" if is_production else str(exc),
-            "path": str(request.url.path),
+            "path": request.url.path,
         }
     )
 
@@ -422,7 +422,7 @@ async def run_full_pipeline(req: FullPipelineRequest):
             language=ci.get("language", "English"),
             word_count=ci.get("word_count"),
             special_instructions=ci.get("special_instructions", ""),
-            tonality_spectrum=ci.get("tonality_spectrum"),
+            tonality_spectrum=ci.get("tonality_spectrum") or {},
         )
         total_tokens += a1["tokensUsed"]
         canonical_draft = a1["content"]
@@ -481,7 +481,7 @@ async def run_full_pipeline(req: FullPipelineRequest):
         if pkg.qa_instructions["enabled"]:
             qa_results = await asyncio.gather(*[
                 qa_agent.run(
-                    content=r["content"],
+                    content=str(r["content"]),
                     brand_profile=profile_dict,
                     seo_enabled=getattr(req, 'seoEnabled', False),
                     seo_settings=getattr(req, 'seoSettings', {}),

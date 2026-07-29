@@ -62,13 +62,21 @@ class RuleViolation(BaseModel):
 
 
 class ValidationResult(BaseModel):
-    score:             float
+    # ── Scores ────────────────────────────────────────────────────────────────
+    score:          float          # Combined score (0-100)
+    static_score:   float          # Static rules only score
+    dynamic_score:  float          # Dynamic rules only score
+
+    # ── Pass/Fail ─────────────────────────────────────────────────────────────
     passed:            bool
     violations:        list[RuleViolation]
     passed_rules:      list[str]
     critical_failures: list[str]
     iteration:         int
     feedback:          str
+
+    # Per-category breakdown
+    category_breakdown: dict = Field(default_factory=dict)
 
 
 class DynamicRuleSet(BaseModel):
