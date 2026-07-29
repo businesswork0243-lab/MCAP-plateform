@@ -1,3 +1,4 @@
+# apps/ai-engine/agents/canonical_writer.py
 """Agent 1 — Canonical Writer: generates the authoritative base document."""
 from services.llm import complete
 
@@ -6,10 +7,53 @@ Your task: produce a comprehensive, publication-ready canonical article.
 Follow the specified writing structure EXACTLY — each section must be present.
 Write with clarity, analytical depth, and editorial precision.
 Do NOT include meta-commentary, section labels, or structural annotations in output.
-Write flowing prose that feels human and opinionated, not templated."""
+Write flowing prose that feels human and opinionated, not templated.
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    ABSOLUTE WRITING PROHIBITION                             ║
+║                    READ THIS BEFORE WRITING ONE WORD                        ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  NEVER start any sentence with a negation to set up a contrast.             ║
+║  This is the #1 AI writing tell. It will disqualify your output.            ║
+║                                                                              ║
+║  FORBIDDEN SENTENCE STRUCTURES — never use these:                           ║
+║                                                                              ║
+║  ❌  "The most profound X isn't Y, it's Z"                                  ║
+║  ❌  "X isn't Y. It's Z."          (two-sentence negation)                  ║
+║  ❌  "This isn't just about X, it's about Y"                                ║
+║  ❌  "It's not X, it's Y"                                                   ║
+║  ❌  "Not X, but Y"                                                          ║
+║  ❌  "This isn't about X. It's about Y."                                    ║
+║  ❌  "It's not merely X"                                                     ║
+║  ❌  "More than just X"                                                      ║
+║  ❌  "Less about X, more about Y"                                            ║
+║  ❌  "Not only X, but also Y"                                                ║
+║  ❌  "Far from being X"                                                      ║
+║  ❌  "Rather than being X"                                                   ║
+║  ❌  "This isn't your typical X"                                             ║
+║                                                                              ║
+║  THE RULE: If you find yourself writing "isn't", "not", "merely",           ║
+║  "just" to CONTRAST two ideas — STOP. Delete the sentence.                  ║
+║  State the second idea DIRECTLY as a positive assertion.                    ║
+║                                                                              ║
+║  EXAMPLES:                                                                   ║
+║  ❌ "The innovation isn't crypto. It's trust."                               ║
+║  ✅ "The innovation is a trust architecture."                                ║
+║                                                                              ║
+║  ❌ "Blockchain isn't just about decentralization."                          ║
+║  ✅ "Blockchain solves a specific coordination problem."                     ║
+║                                                                              ║
+║  ❌ "RAG is not a data problem. It is a reasoning problem."                  ║
+║  ✅ "RAG is a reasoning architecture problem."                               ║
+║                                                                              ║
+║  ❌ "The most profound shift isn't in the code, it's in the incentives."    ║
+║  ✅ "The most profound shift is in the incentive architecture."              ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝"""
 
 
-# ─── Built-in Structure Flows ─────────────────────────────────────────────────
+# ── Structure Flows ───────────────────────────────────────────────────────────
 
 STRUCTURE_FLOWS = {
     "debate": {
@@ -70,7 +114,6 @@ STRUCTURE_FLOWS = {
         ],
         "ideal_for": "Organizational analysis, public policy, corporate governance",
     },
-    # ── New structures (from content wizard) ─────────────────────────────────
     "listicle": {
         "name": "Listicle",
         "flow": [
@@ -137,8 +180,6 @@ STRUCTURE_FLOWS = {
     },
 }
 
-# ─── Word Count Guidance ──────────────────────────────────────────────────────
-
 WORD_COUNT_GUIDANCE = {
     500:  "500 words — concise, punchy. Every sentence must earn its place.",
     800:  "800 words — standard article length. Clear structure, no filler.",
@@ -148,8 +189,6 @@ WORD_COUNT_GUIDANCE = {
     2500: "2500 words — authority piece. Deep research and extensive coverage.",
     3000: "3000+ words — pillar content. Definitive treatment of the subject.",
 }
-
-# ─── User Prompt Template ─────────────────────────────────────────────────────
 
 USER_TEMPLATE = """Write a canonical article following the exact structure below.
 
@@ -182,6 +221,21 @@ LANGUAGE: {language}
 
 {special_instructions}
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  BEFORE YOU WRITE YOUR OPENING SENTENCE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Ask yourself: "Am I about to say what X is NOT before saying what it IS?"
+
+If YES → Delete it. Start with the positive claim directly.
+
+  ❌ "The most profound X isn't Y, it's Z"     → FORBIDDEN
+  ❌ "X isn't about Y. It's about Z."          → FORBIDDEN
+  ❌ "This isn't just X, it's Y"               → FORBIDDEN
+  ✅ "X is Z." / "X does Y." / "X solves Z."  → CORRECT
+
+This applies to EVERY sentence — not just the opening.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 EXECUTION RULES:
 - Write a compelling headline first
 - Follow the structural flow exactly — each section must be present and substantive
@@ -193,43 +247,29 @@ EXECUTION RULES:
 Write the full article now:"""
 
 
-# ─── Custom Structure Handler ─────────────────────────────────────────────────
-
 def _build_custom_flow_block(flow: list[str]) -> tuple[str, str, str]:
-    """Convert custom flow array into formatted prompt sections."""
     numbered = [f"{i+1}. {step}" for i, step in enumerate(flow)]
-    return (
-        "Custom Structure",
-        "User-defined writing structure",
-        "\n".join(numbered),
-    )
+    return "Custom Structure", "User-defined writing structure", "\n".join(numbered)
 
-
-# ─── Agent Entry Point ────────────────────────────────────────────────────────
 
 async def run(
-    topic:               str,
-    objective:           str         = "Build thought leadership",
-    context:             str         = "",
-    audience:            str         = "General Business",
-    icp_emphasis:        str         = "",
-    icp_avoid:           str         = "",
-    perspective:         str         = "Founder",
-    perspective_voice:   str         = "",
-    structure:           str         = "thesis",
+    topic:                 str,
+    objective:             str              = "Build thought leadership",
+    context:               str              = "",
+    audience:              str              = "General Business",
+    icp_emphasis:          str              = "",
+    icp_avoid:             str              = "",
+    perspective:           str              = "Founder",
+    perspective_voice:     str              = "",
+    structure:             str              = "thesis",
     custom_structure_flow: list[str] | None = None,
-    cta:                 str         = "",
-    language:            str         = "English",
-    word_count:          int | None  = None,
-    special_instructions: str        = "",
-    tonality_spectrum:   dict | None = None,
+    cta:                   str              = "",
+    language:              str              = "English",
+    word_count:            int | None       = None,
+    special_instructions:  str              = "",
+    tonality_spectrum:     dict | None      = None,
 ) -> dict:
-    """
-    Generate the canonical article.
 
-    Priority: custom_structure_flow > structure lookup > thesis default
-    """
-    # ── Resolve structure ─────────────────────────────────────────────────────
     if custom_structure_flow and len(custom_structure_flow) > 0:
         structure_name, structure_purpose, flow_text = _build_custom_flow_block(
             custom_structure_flow
@@ -242,33 +282,21 @@ async def run(
         structure_purpose = f"Ideal for: {struct['ideal_for']}"
         flow_text         = "\n".join(struct["flow"])
 
-    # ── Word count instruction ────────────────────────────────────────────────
-    wc_instruction = ""
     if word_count:
-        guidance = WORD_COUNT_GUIDANCE.get(
-            word_count,
-            f"approximately {word_count} words"
-        )
+        guidance       = WORD_COUNT_GUIDANCE.get(word_count, f"approximately {word_count} words")
         wc_instruction = f"LENGTH REQUIREMENT: {guidance}"
     else:
         wc_instruction = "LENGTH: 1000-1500 words"
 
-    # ── Max tokens based on word count ────────────────────────────────────────
-    # ~1.3 tokens per word, plus overhead
     max_tok = int((word_count or 1500) * 1.5) + 500
-    max_tok = min(max(max_tok, 2000), 8000)  # clamp 2000-8000
+    max_tok = min(max(max_tok, 2000), 8000)
 
-    # ── Perspective voice ─────────────────────────────────────────────────────
-    from services.prompt_compiler import PERSPECTIVE_VOICE
-    pv = perspective_voice or PERSPECTIVE_VOICE.get(perspective, perspective)
-
-    # ── ICP from context if not passed directly ───────────────────────────────
-    from services.prompt_compiler import ICP_EMPHASIS
-    icp = ICP_EMPHASIS.get(audience, ICP_EMPHASIS["General Business"])
+    from services.prompt_compiler import PERSPECTIVE_VOICE, ICP_EMPHASIS
+    pv       = perspective_voice or PERSPECTIVE_VOICE.get(perspective, perspective)
+    icp      = ICP_EMPHASIS.get(audience, ICP_EMPHASIS["General Business"])
     emphasis = icp_emphasis or icp["emphasis"]
     avoid    = icp_avoid    or icp["avoid"]
 
-    # ── Build prompt ──────────────────────────────────────────────────────────
     user_prompt = USER_TEMPLATE.format(
         topic=topic,
         objective=objective,
