@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/store/auth';
-import { tokenManager } from '@/lib/api';
 
 function LoginForm() {
   const router       = useRouter();
@@ -24,7 +23,8 @@ function LoginForm() {
 
   // Already logged in redirect
   useEffect(() => {
-    if (user && tokenManager.get()) {
+    const hasToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    if (user && hasToken) {
       router.replace(returnTo);
     }
   }, [user, router, returnTo]);

@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '@/store/auth';
-import { tokenManager } from '@/lib/api';
 
 interface FormData {
   name:        string;
@@ -42,7 +41,8 @@ export default function RegisterPage() {
   const [showPwd, setShowPwd] = useState(false);
 
   useEffect(() => {
-    if (user && tokenManager.get()) {
+    const hasToken = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    if (user && hasToken) {
       router.replace('/dashboard');
     }
   }, [user, router]);
