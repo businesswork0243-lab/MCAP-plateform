@@ -16,17 +16,17 @@ import { PlatformIcon, getPlatformConfig } from '@/components/platform-icons';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Artifact {
-  id:              string;
-  request_id?:     string;
-  content_type?:   string;
-  agent_type?:     string;
-  body?:           string;
-  content?:        string;
-  version?:        number;
-  status?:         string;
-  quality_score?:  Record<string, unknown>;
-  metadata?:       Record<string, unknown> | string;
-  created_at?:     string;
+  id: string;
+  request_id?: string;
+  content_type?: string;
+  agent_type?: string;
+  body?: string;
+  content?: string;
+  version?: number;
+  status?: string;
+  quality_score?: Record<string, unknown> | string;
+  metadata?: Record<string, unknown> | string;
+  created_at?: string;
 }
 
 interface ContentRequest {
@@ -119,6 +119,28 @@ function parsePlatforms(raw: string[] | string | null | undefined): string[] {
   }
 }
 
+function parseMaybeJson<T = Record<string, unknown>>(value: unknown): T | null {
+  if (!value) return null;
+  if (typeof value === 'object') return value as T;
+  if (typeof value !== 'string') return null;
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return null;
+  }
+}
+
+function getArtifactQualityScore(artifact: Artifact | null | undefined): Record<string, unknown> {
+  if (!artifact?.quality_score) return {};
+  return parseMaybeJson<Record<string, unknown>>(artifact.quality_score) || {};
+}
+
+function getArtifactMetadata(artifact: Artifact | null | undefined): Record<string, unknown> {
+  if (!artifact?.metadata) return {};
+  return parseMaybeJson<Record<string, unknown>>(artifact.metadata) || {};
+}
+
 // ─── Score Bar Component ──────────────────────────────────────────────────────
 
 function ScoreBar({ label, value }: { label: string; value: number }) {
@@ -156,7 +178,7 @@ export default function ContentWorkspacePage() {
   // Fetch content
   const { data, isLoading, error } = useQuery({
     queryKey: ['content', id],
-    queryFn: () => api.get(`/content/${id}`).then((r) => r.data),
+    queryFn: () => api.get(`/content/${id}`).then((r: any) => r.data),
     enabled: !!id,
     retry: 2,
   });
@@ -267,7 +289,7 @@ export default function ContentWorkspacePage() {
 
   const rerunMutation = useMutation({
     mutationFn: () => api.post(`/content/${id}/rerun`),
-    onSuccess: (response) => {
+    onSuccess: (response: any) => {
       const newId = response.data?.requestId || response.data?.contentId;
       if (newId) {
         router.push(`/content/${newId}/generating`);
@@ -288,7 +310,38 @@ export default function ContentWorkspacePage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const score = request?.metadata?.overallScore ?? request?.metadata?.qualityScore ?? 0;
+  const qaArtifact = useMemo(() => {
+    return artifacts.find(a => {
+      const type = getArtifactAgentType(a).toLowerCase();
+      return type === 'qa_reviewed' || type.includes('qa');
+    }) || null;
+  }, [artifacts]);
+
+  const qaQuality = useMemo(() => getArtifactQualityScore(qaArtifact), [qaArtifact]);
+  const qaMetadata = useMemo(() => getArtifactMetadata(qaArtifact), [qaArtifact]);
+
+  const score = Number(
+    qaQuality?.overall ??
+    qaQuality?.overallScore ??
+    qaMetadata?.overallScore ??
+    0
+  );
+
+  const scoreMeta = {
+    brandScore: Number(qaQuality?.brand ?? qaMetadata?.brandScore ?? 0),
+    readabilityScore: Number(qaQuality?.readability ?? qaMetadata?.readabilityScore ?? 0),
+    platformScore: Number(qaQuality?.platform_fit ?? qaMetadata?.platformScore ?? 0),
+    structureScore: Number(qaQuality?.structure ?? qaMetadata?.structureScore ?? 0),
+    humanizationScore: Number(qaQuality?.humanization ?? qaMetadata?.humanizationScore ?? 0),
+    consistencyScore: Number(qaQuality?.consistency ?? qaMetadata?.consistencyScore ?? 0),
+    clarityScore: Number(qaQuality?.clarity ?? qaMetadata?.clarityScore ?? 0),
+    engagementScore: Number(qaQuality?.engagement ?? qaMetadata?.engagementScore ?? 0),
+    ctaScore: Number(qaQuality?.cta ?? qaMetadata?.ctaScore ?? 0),
+  };
+
+  const qaFlags = Array.isArray(qaMetadata?.flags)
+    ? (qaMetadata.flags as string[])
+    : [];
 
   // ── Loading State ──────────────────────────────────────────────────────────
   if (isLoading) {
@@ -522,15 +575,15 @@ export default function ContentWorkspacePage() {
             <div className="space-y-2.5">
               <ScoreBar label="Overall" value={score} />
               <div className="border-t my-2" />
-              <ScoreBar label="Brand (20%)" value={request.metadata?.brandScore ?? 0} />
-              <ScoreBar label="Readability (15%)" value={request.metadata?.readabilityScore ?? 0} />
-              <ScoreBar label="Platform (15%)" value={request.metadata?.platformScore ?? 0} />
-              <ScoreBar label="Structure (10%)" value={request.metadata?.structureScore ?? 0} />
-              <ScoreBar label="Humanization (10%)" value={request.metadata?.humanizationScore ?? 0} />
-              <ScoreBar label="Consistency (10%)" value={request.metadata?.consistencyScore ?? 0} />
-              <ScoreBar label="Clarity (10%)" value={request.metadata?.clarityScore ?? 0} />
-              <ScoreBar label="Engagement (5%)" value={request.metadata?.engagementScore ?? 0} />
-              <ScoreBar label="CTA (5%)" value={request.metadata?.ctaScore ?? 0} />
+              <ScoreBar label="Brand (20%)" value={scoreMeta.brandScore} />
+              <ScoreBar label="Readability (15%)" value={scoreMeta.readabilityScore} />
+              <ScoreBar label="Platform (15%)" value={scoreMeta.platformScore} />
+              <ScoreBar label="Structure (10%)" value={scoreMeta.structureScore} />
+              <ScoreBar label="Humanization (10%)" value={scoreMeta.humanizationScore} />
+              <ScoreBar label="Consistency (10%)" value={scoreMeta.consistencyScore} />
+              <ScoreBar label="Clarity (10%)" value={scoreMeta.clarityScore} />
+              <ScoreBar label="Engagement (5%)" value={scoreMeta.engagementScore} />
+              <ScoreBar label="CTA (5%)" value={scoreMeta.ctaScore} />
             </div>
           </div>
 
@@ -540,12 +593,12 @@ export default function ContentWorkspacePage() {
               QA Findings
             </h3>
             <div className="space-y-1.5">
-              {(request.metadata?.flags ?? []).length === 0 ? (
+              {qaFlags.length === 0 ? (
                 <div className="flex items-center gap-2 text-xs text-green-600">
                   <CheckCircle className="w-3.5 h-3.5" /> No issues found
                 </div>
               ) : (
-                (request.metadata?.flags ?? []).map((flag: string, i: number) => (
+                qaFlags.map((flag: string, i: number) => (
                   <div key={i} className="flex items-center gap-2 text-xs text-yellow-600">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                     <span>{safeReplace(flag, /_/g, ' ')}</span>

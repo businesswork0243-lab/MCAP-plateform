@@ -66,7 +66,7 @@ router.get('/overview', async (req: AuthenticatedRequest, res: Response) => {
           ))                                                           AS avg_completion_seconds
         FROM content_requests cr
         WHERE cr.organization_id = $1 ${clientFilter}
-          AND cr.created_at >= NOW() - ($${params.length + 1} || ' days')::INTERVAL`,
+          AND cr.created_at >= NOW() - INTERVAL '1 day' * $${params.length + 1}`,
         [...params, days]
       ),
 
@@ -81,7 +81,7 @@ router.get('/overview', async (req: AuthenticatedRequest, res: Response) => {
         FROM agent_executions ae
         JOIN content_requests cr ON ae.request_id = cr.id
         WHERE cr.organization_id = $1 ${clientFilter}
-          AND ae.created_at >= NOW() - ($${params.length + 1} || ' days')::INTERVAL`,
+          AND ae.created_at >= NOW() - INTERVAL '1 day' * $${params.length + 1}`,
         [...params, days]
       ),
 
@@ -129,7 +129,7 @@ router.get('/productivity', async (req: AuthenticatedRequest, res: Response) => 
         COUNT(*) FILTER (WHERE status = 'generation_failed')            AS failed
        FROM content_requests
        WHERE organization_id = $1
-         AND created_at >= NOW() - ($2 || ' days')::INTERVAL
+         AND created_at >= NOW() - INTERVAL '1 day' * $2
        GROUP BY day
        ORDER BY day ASC`,
       [orgId, days]
@@ -172,7 +172,7 @@ router.get('/quality', async (req: AuthenticatedRequest, res: Response) => {
        FROM artifacts a
        JOIN content_requests cr ON a.request_id = cr.id
        WHERE cr.organization_id = $1
-         AND a.created_at >= NOW() - ($2 || ' days')::INTERVAL
+         AND a.created_at >= NOW() - INTERVAL '1 day' * $2
          AND a.quality_score IS NOT NULL
          AND a.quality_score != 'null'::jsonb`,
       [orgId, days]
@@ -228,7 +228,7 @@ router.get('/platforms', async (req: AuthenticatedRequest, res: Response) => {
          ON a.request_id = cr.id
         AND a.platform = platform_val
        WHERE cr.organization_id = $1
-         AND cr.created_at >= NOW() - ($2 || ' days')::INTERVAL
+         AND cr.created_at >= NOW() - INTERVAL '1 day' * $2
        GROUP BY platform_val
        ORDER BY count DESC
        LIMIT 10`,
@@ -264,7 +264,7 @@ router.get('/team-activity', async (req: AuthenticatedRequest, res: Response) =>
        FROM users u
        LEFT JOIN content_requests cr
          ON cr.created_by = u.id
-        AND cr.created_at >= NOW() - ($2 || ' days')::INTERVAL
+        AND cr.created_at >= NOW() - INTERVAL '1 day' * $2
        LEFT JOIN agent_executions ae
          ON ae.request_id = cr.id
        WHERE u.organization_id = $1
@@ -298,7 +298,7 @@ router.get('/writing-structures', async (req: AuthenticatedRequest, res: Respons
        FROM content_requests cr
        LEFT JOIN artifacts a ON a.request_id = cr.id
        WHERE cr.organization_id = $1
-         AND cr.created_at >= NOW() - ($2 || ' days')::INTERVAL
+         AND cr.created_at >= NOW() - INTERVAL '1 day' * $2
        GROUP BY cr.writing_structure
        ORDER BY count DESC`,
       [orgId, days]

@@ -38,10 +38,18 @@ def validate_env() -> None:
 
 def get_allowed_origins() -> list[str]:
     origins = ["http://localhost:4000", "http://localhost:3000"]
-    if api_host := os.getenv("ALLOWED_ORIGINS"):
-        if not api_host.startswith("http"):
-            api_host = f"https://{api_host}"
-        origins.append(api_host)
+
+    raw = os.getenv("ALLOWED_ORIGINS", "")
+    if raw:
+        for host in raw.split(","):
+            host = host.strip()
+            if not host:
+                continue
+            if not host.startswith("http"):
+                host = f"https://{host}"
+            origins.append(host)
+
+    log.info("Allowed CORS origins: %s", origins)
     return origins
 
 
@@ -74,7 +82,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_allowed_origins(),
-    allow_origin_regex=r"https://.*\.onrender\.com",
+    allow_origin_regex=r"https://.*\.(onrender\.com|railway\.app|vercel\.app)",
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
 )

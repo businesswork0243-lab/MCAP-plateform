@@ -55,18 +55,14 @@ export const contentQueueEvents = new QueueEvents('content-generation', { connec
 
 export async function addContentJob(
   requestId: string,
-  payload: {
-    topic: string;
-    context?: string;
-    targetPlatform: string;
-    brandProfileId: string;
-    projectId?: string;
-    organizationId: string;
-    createdBy: string;
-  },
+  payload: Omit<ContentJobData, 'requestId'>,
   priority = 0
 ) {
-  return contentQueue.add('generate', { requestId, ...payload }, { priority });
+  return contentQueue.add(
+    'generate',
+    { requestId, ...payload },
+    { priority }
+  );
 }
 
 export async function addHumanizationJob(requestId: string, artifactId: string) {
@@ -96,9 +92,11 @@ export interface ContentJobData {
   icp_description?: string;
   perspective?: string;
   writing_structure?: string;
+  custom_structure_flow?: string[] | null;
   cta?: string;
   targetPlatforms?: string[];
-  brandProfile?: any;
+  targetPlatform?: string; // backward compatibility
+  brandProfile?: Record<string, unknown> | null;
   enableHumanization?: boolean;
   humanizationIntensity?: string;
   enableQA?: boolean;
@@ -106,8 +104,9 @@ export interface ContentJobData {
   keywords?: string[];
   specialInstructions?: string;
   seoEnabled?: boolean;
-  seoSettings?: any;
-  targetPlatform?: string;
+  seoSettings?: Record<string, unknown>;
+  tonalitySpectrum?: Record<string, number>;
+  wordCount?: number;
   brandProfileId?: string;
   projectId?: string;
   createdBy?: string;

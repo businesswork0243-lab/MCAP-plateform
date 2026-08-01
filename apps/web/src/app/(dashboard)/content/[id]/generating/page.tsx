@@ -59,27 +59,32 @@ export default function GeneratingPage() {
   // ── Polling as fallback for status ─────────────────────────────
   const { data } = useQuery({
     queryKey: ['content-generating', id],
-    queryFn:  () => api.get(`/content/jobs/${id}`).then(r => r.data),
-    refetchInterval: (data) => {
-      const s = (data as { request?: { status: string } })?.request?.status;
-      if (['approved', 'awaiting_review', 'generation_failed', 'completed', 'failed'].includes(s ?? '')) {
-        return false;
-      }
-      return 5_000;
-    },
-    enabled: status === 'running',
+    queryFn: () => api.get(`/content/jobs/${id}`).then((r: any) => r.data),
+    refetchInterval: status === 'running' ? 5_000 : false,
+    enabled: !!id && status === 'running',
   });
 
   // ── Check DB status ────────────────────────────────────────────
   useEffect(() => {
     const s = data?.request?.status;
-    if (s === 'approved' || s === 'awaiting_review' || s === 'completed') {
+
+    if (['approved', 'awaiting_review', 'completed'].includes(s)) {
       setProgress(100);
       setStatus('done');
-      setTimeout(() => router.replace(`/content/${id}`), 1_500);
-    } else if (s === 'generation_failed' || s === 'failed') {
+      setTimeout(() => router.replace(`/content/${id}`), 1500);
+      return;
+    }
+
+    if (['generation_failed', 'failed'].includes(s)) {
       setStatus('failed');
-      setFailReason(data?.request?.error_message || 'Generation failed. Please try again.');
+      setFailReason(
+        data?.request?.error_message || 'Generation failed. Please try again.'
+      );
+      return;
+    }
+
+    if (['queued', 'running', 'processing'].includes(s)) {
+      setStatus('running');
     }
   }, [data, id, router]);
 
@@ -119,12 +124,14 @@ export default function GeneratingPage() {
 
   // ── Timeout safety net ─────────────────────────────────────────
   useEffect(() => {
-    const TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
-    
+    const TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
+
     const timeout = setTimeout(() => {
       if (status === 'running' && progress < 100) {
         setStatus('failed');
-        setFailReason('Generation is taking longer than expected. The AI service may be waking up. Please try again in a minute.');
+        setFailReason(
+          'Generation is taking longer than expected. The AI engine may still be waking up or processing. Please retry in a moment.'
+        );
       }
     }, TIMEOUT_MS);
 

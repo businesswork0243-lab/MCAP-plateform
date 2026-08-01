@@ -4,6 +4,7 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { PlatformIconBadge, PLATFORM_CONFIG } from '@/components/platform-icons';
 import { Check } from 'lucide-react';
@@ -963,7 +964,7 @@ e.g. "If this resonated, DM me the word GROWTH and I'll send you the full framew
               <div className="p-4 bg-white/5 rounded-xl border border-white/10">
                 <p className="text-sm text-gray-400 mb-3">Humanization Intensity</p>
                 <div className="grid grid-cols-3 gap-2">
-                  {['light', 'medium', 'heavy'].map(level => (
+                  {['light', 'medium', 'aggressive'].map(level => (
                     <button
                       key={level}
                       onClick={() => update('humanizationIntensity', level)}
@@ -973,7 +974,7 @@ e.g. "If this resonated, DM me the word GROWTH and I'll send you the full framew
                           : 'bg-white/5 border-white/10 text-gray-400'
                       }`}
                     >
-                      {level}
+                      {level === 'aggressive' ? 'heavy' : level}
                     </button>
                   ))}
                 </div>
@@ -1111,10 +1112,40 @@ export default function NewContentPage() {
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState('');
 
-  // Mock data — replace with actual API calls
-  const savedICPs: ICPProfile[] = [];
+  // ✅ FIX: Real API calls
+  const { data: brandData } = useQuery({
+    queryKey: ['brand-profiles'],
+    queryFn:  () => api.get('/brand').then((r: any) => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: icpData } = useQuery({
+    queryKey: ['icp-profiles-all'],
+    queryFn:  () => api.get('/brand/icps/all').then((r: any) => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // ✅ FIX: Correct variable names
+  const brandProfiles = (brandData?.profiles ?? []).map((p: any) => ({
+    id:   p.id,
+    name: p.name,
+  }));
+
+  const savedICPs: ICPProfile[] = (icpData?.icps ?? []).map((i: any) => ({
+    id:   i.id,
+    name: i.name,
+    basicChars: i.basic_characteristics ?? {},
+    currentChallenges: i.current_challenges ?? [],
+    goals: i.goals ?? [],
+    frustrations: i.frustrations ?? [],
+    emotionalMotivations: i.emotional_motivations ?? [],
+    interests: i.interests ?? [],
+    infoSources: i.information_sources ?? [],
+    personalityScores: i.personality_scores ?? {},
+    positioningStrategy: i.positioning_strategy ?? '',
+  }));
+
   const savedStructures: WritingStructure[] = [];
-  const brandProfiles: Array<{ id: string; name: string }> = [];
 
   const [form, setForm] = useState<ContentForm>({
     topic: '',

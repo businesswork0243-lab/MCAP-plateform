@@ -6,12 +6,26 @@ import uuid
 import logging
 from services.llm import complete
 from services.text_cleaner import clean_ai_patterns, detect_all_patterns, detect_false_negatives
-from agents.rule_engine.orchestrator import RuleEngineOrchestrator
 
 from typing import TypedDict
 
 log = logging.getLogger("ai-engine.humanizer")
-_rule_engine = RuleEngineOrchestrator()
+
+# ✅ FIX: Lazy initialization — module import pe crash nahi hoga
+_rule_engine = None
+
+def _get_rule_engine():
+    """Lazy-load Rule Engine — only when first needed."""
+    global _rule_engine
+    if _rule_engine is None:
+        try:
+            from agents.rule_engine.orchestrator import RuleEngineOrchestrator
+            _rule_engine = RuleEngineOrchestrator()
+            log.info("Rule Engine initialized successfully")
+        except Exception as e:
+            log.error("Rule Engine initialization failed: %s", e)
+            raise
+    return _rule_engine
 
 
 class IntensityRuleConfig(TypedDict):
@@ -225,13 +239,20 @@ INTENSITY_RULES: dict[str, IntensityRuleConfig] = {
 # ─── Language-Specific Rules ──────────────────────────────────────────────────
 
 LANGUAGE_RULES = {
-    "Hindi": "Apply humanization rules while writing in Hindi. Use natural Hindi idioms and phrasing. Avoid direct English translations.",
+    "Hindi": (
+        "Apply humanization rules while writing in Hindi. "
+        "Use natural Hindi idioms and phrasing. "
+        "Avoid direct English translations."
+    ),
     "Hinglish": (
         "Content is in Hinglish (Hindi-English mix). "
         "Humanize in a way that feels natural to Indian professionals — "
         "casual Hindi expressions mixed with English are expected and welcome."
     ),
-    "Spanish": "Apply humanization in Spanish. Use natural Spanish phrasing and avoid direct translations from English.",
+    "Spanish": (
+        "Apply humanization in Spanish. "
+        "Use natural Spanish phrasing and avoid direct translations from English."
+    ),
     "French": "Apply humanization in French. Use natural French phrasing.",
 }
 
@@ -284,7 +305,7 @@ ABSOLUTE RULES:
 OUTPUT: Write only the humanized content. No commentary, no labels."""
 
 
-# ─── Second Pass Prompt (for stubborn false negatives) ────────────────────────
+# ─── Second Pass Prompt ───────────────────────────────────────────────────────
 
 SECOND_PASS_SYSTEM = """You are a final-pass editor whose sole job is to eliminate FALSE NEGATIVES.
 
@@ -299,7 +320,6 @@ These are AI writing tells. Convert every one into a DIRECT ASSERTION.
 
 Examples of fixes:
   BAD:  "Blockchain isn't just about crypto — it's about trust."
-  GOOD: "Blockchain is about trust, not just crypto." ❌ (still uses "not just")
   GOOD: "Blockchain enables trust. Crypto is one application." ✅
 
   BAD:  "Not only does it scale, but it also secures."
@@ -318,41 +338,39 @@ RULES:
 # ─── Detection Block Builder ──────────────────────────────────────────────────
 
 def _build_detection_block(content: str) -> str:
-    """
-    Build detection warnings for LLM based on actual patterns found.
-    Helps the LLM focus on real issues.
-    """
+    """Build detection warnings for LLM based on actual patterns found."""
     detections = detect_all_patterns(content)
-    
+
     if detections["total_issues"] == 0:
         return "PRE-SCAN: No obvious AI patterns detected. Focus on natural voice."
-    
+
     lines = ["🚨 PRE-SCAN DETECTED THESE ISSUES — FIX ALL OF THEM:"]
-    
+
     if detections["false_negative_count"] > 0:
         false_negs = detect_false_negatives(content)
-        examples = [f"'{f['match']}'" for f in false_negs[:3]]
+        examples   = [f"'{f['match']}'" for f in false_negs[:3]]
         lines.append(
-            f"  ⚠️  FALSE NEGATIVES ({detections['false_negative_count']} found): {', '.join(examples)}"
+            f"  ⚠️  FALSE NEGATIVES ({detections['false_negative_count']} found): "
+            f"{', '.join(examples)}"
         )
         lines.append("     → Convert each to a direct positive assertion.")
-    
+
     if detections["ai_openings"] > 0:
         lines.append(f"  ⚠️  AI OPENING CLICHES ({detections['ai_openings']} found)")
         lines.append("     → Start with a specific observation, not 'In today's world...'")
-    
+
     if detections["hedging"] > 0:
         lines.append(f"  ⚠️  HEDGING PHRASES ({detections['hedging']} found)")
         lines.append("     → State things directly. Delete 'It's worth noting...'")
-    
+
     if detections["buzzwords"] > 0:
         lines.append(f"  ⚠️  BUZZWORDS ({detections['buzzwords']} found)")
         lines.append("     → Replace with simple, specific words.")
-    
+
     if detections["transitions"] > 0:
         lines.append(f"  ⚠️  AI TRANSITIONS ({detections['transitions']} found)")
         lines.append("     → Use natural connectors: 'But', 'So', 'And', 'Still'")
-    
+
     return "\n".join(lines)
 
 
@@ -360,40 +378,40 @@ def _build_detection_block(content: str) -> str:
 
 async def run(
     content:       str,
-    intensity:     str  = "medium",
+    intensity:     str       = "medium",
     tonality:      dict | None = None,
-    language:      str  = "English",
+    language:      str       = "English",
     brand_phrases: list | None = None,
-    user_prompt:   str  = "",
+    user_prompt:   str       = "",
     brand_data:    dict | None = None,
     extra_context: dict | None = None,
     request_id:    str | None  = None,
 ) -> dict:
     """
     Humanize content with aggressive false negative removal + Rule Engine pass.
-    
+
     Pipeline:
-      1. Pre-scan for AI patterns (false negatives, cliches, buzzwords)
+      1. Pre-scan for AI patterns
       2. LLM humanization with detection-aware prompt
       3. Deterministic cleanup pass (text_cleaner)
-      4. Optional second pass if false negatives remain (medium/aggressive)
-      5. Rule Engine pass (Agent 1 static/dynamic validation & Agent 2 loop)
+      4. Optional second pass if false negatives remain
+      5. Rule Engine pass
     """
     # ── Validate intensity ────────────────────────────────────────────────────
     if intensity not in INTENSITY_RULES:
         log.warning("Invalid intensity '%s' — defaulting to medium", intensity)
         intensity = "medium"
 
-    rules_config = INTENSITY_RULES[intensity]
-    rules_list = rules_config["rules"]
-    temp_val = rules_config["temperature"]
+    rules_config       = INTENSITY_RULES[intensity]
+    rules_list         = rules_config["rules"]
+    temp_val           = rules_config["temperature"]
     second_pass_enabled = rules_config["second_pass"]
 
-    # ── Pre-scan for patterns ─────────────────────────────────────────────────
+    # ── Pre-scan ──────────────────────────────────────────────────────────────
     pre_detections = detect_all_patterns(content)
     detection_block = _build_detection_block(content)
 
-    # ── Build banned phrases list ─────────────────────────────────────────────
+    # ── Banned phrases ────────────────────────────────────────────────────────
     all_banned = list(BANNED_AI_PHRASES)
     if brand_phrases:
         for phrase in brand_phrases:
@@ -422,7 +440,7 @@ async def run(
 
     # ── Language block ────────────────────────────────────────────────────────
     lang_instruction = LANGUAGE_RULES.get(language, "")
-    language_block = (
+    language_block   = (
         f"LANGUAGE NOTE: {lang_instruction}"
         if lang_instruction
         else f"Language: {language} — apply all rules in this language."
@@ -464,33 +482,26 @@ async def run(
 
     # ── Pass 2: Deterministic Cleanup ─────────────────────────────────────────
     cleanup_result = clean_ai_patterns(humanized, intensity=intensity)
-    humanized = cleanup_result["content"]
+    humanized      = cleanup_result["content"]
 
     # ── Pass 3: Second LLM Pass (only if false negatives remain) ─────────────
-    post_scan = detect_false_negatives(humanized)
-    tokens_p2 = 0
+    post_scan    = detect_false_negatives(humanized)
+    tokens_p2    = 0
     second_pass_run = False
 
     if second_pass_enabled and len(post_scan) > 0:
-        log.info(
-            "Second pass triggered | remaining_false_negs=%d",
-            len(post_scan)
-        )
+        log.info("Second pass triggered | remaining_false_negs=%d", len(post_scan))
         second_pass_run = True
 
-        second_pass_user = f"""The text below still contains {len(post_scan)} false negative(s).
-
-DETECTED PATTERNS TO FIX:
-{chr(10).join(f"  - '{f['match']}'" for f in post_scan[:5])}
-
-Rewrite ONLY the sentences containing these patterns.
-Convert each to a direct positive assertion.
-Keep everything else unchanged.
-
-TEXT:
-{humanized}
-
-Output only the fixed text."""
+        second_pass_user = (
+            f"The text below still contains {len(post_scan)} false negative(s).\n\n"
+            f"DETECTED PATTERNS TO FIX:\n"
+            + "\n".join(f"  - '{f['match']}'" for f in post_scan[:5])
+            + f"\n\nRewrite ONLY the sentences containing these patterns.\n"
+            f"Convert each to a direct positive assertion.\n"
+            f"Keep everything else unchanged.\n\n"
+            f"TEXT:\n{humanized}\n\nOutput only the fixed text."
+        )
 
         humanized_p2, tokens_p2 = await complete(
             SECOND_PASS_SYSTEM,
@@ -499,11 +510,10 @@ Output only the fixed text."""
             max_tokens=max_tok,
         )
 
-        # Only use second pass if it actually improved things
+        # ✅ Only use second pass if it actually improved things
         p2_scan = detect_false_negatives(humanized_p2)
         if len(p2_scan) < len(post_scan):
             humanized = humanized_p2
-            # Re-run cleanup on second pass output
             cleanup_result2 = clean_ai_patterns(humanized, intensity=intensity)
             humanized = cleanup_result2["content"]
         else:
@@ -511,17 +521,18 @@ Output only the fixed text."""
 
         total_tokens += tokens_p2
 
-    # ── Rule Engine — always runs (SPEC COMPLIANT) ────────────────────────
+    # ── Rule Engine ───────────────────────────────────────────────────────────
     rule_engine_meta: dict = {}
 
     try:
         req_id = request_id or str(uuid.uuid4())
 
-        # SPEC FIX: brand_data=None pe bhi chale
-        # Empty dict pass karo — Agent 3 minimal rules generate karega
+        # ✅ FIX: Lazy load Rule Engine
+        engine = _get_rule_engine()
+
         safe_brand_data = brand_data or {}
 
-        re_result = await _rule_engine.process(
+        re_result = await engine.process(
             content=humanized,
             user_prompt=user_prompt or content[:200],
             brand_data=safe_brand_data,
@@ -531,11 +542,11 @@ Output only the fixed text."""
 
         humanized = re_result.final_content
 
-        static_val = re_result.static_validation
-        static_score = static_val.static_score if static_val else 0.0
-        dynamic_score = static_val.dynamic_score if static_val else 0.0
-        passed = static_val.passed if static_val else False
-        violations_count = len(static_val.violations) if static_val else 0
+        static_val       = re_result.static_validation
+        static_score     = static_val.static_score  if static_val else 0.0
+        dynamic_score    = static_val.dynamic_score if static_val else 0.0
+        passed           = static_val.passed        if static_val else False
+        violations_count = len(static_val.violations)      if static_val else 0
         category_breakdown = static_val.category_breakdown if static_val else {}
 
         rule_engine_meta = {
@@ -570,11 +581,12 @@ Output only the fixed text."""
 
     # ── Final metrics ─────────────────────────────────────────────────────────
     final_detections = detect_all_patterns(humanized)
-    
+
     pre_total  = pre_detections["total_issues"]
     post_total = final_detections["total_issues"]
     reduction_pct = round(
-        ((pre_total - post_total) / pre_total * 100) if pre_total > 0 else 100.0,
+        ((pre_total - post_total) / pre_total * 100)
+        if pre_total > 0 else 100.0,
         1,
     )
 

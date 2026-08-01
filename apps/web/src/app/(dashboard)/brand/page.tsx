@@ -1,8 +1,10 @@
 // apps/web/src/app/(dashboard)/brand/page.tsx
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import api from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -663,12 +665,43 @@ const TABS = [
 ];
 
 export default function BrandPage() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('identity');
   const [showICPModal, setShowICPModal] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
 
-  const [profile, setProfile] = useState<BrandProfile>({
+  // ── Fetch brand profiles ──────────────────────────────────────────────────
+  const { data: brandData, isLoading: brandsLoading } = useQuery({
+    queryKey: ['brand-profiles'],
+    queryFn:  () => api.get('/brand').then((r: any) => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const profiles = brandData?.profiles ?? [];
+
+  // ── Fetch ICPs ────────────────────────────────────────────────────────────
+  const { data: icpData } = useQuery({
+    queryKey: ['icp-profiles-all'],
+    queryFn:  () => api.get('/brand/icps/all').then((r: any) => r.data),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const icpProfiles = icpData?.icps ?? [];
+
+  // ── Active profile ────────────────────────────────────────────────────────
+  const activeProfile = profiles.find(
+    (p: { id: string }) => p.id === activeProfileId
+  ) ?? profiles[0] ?? null;
+
+  // Auto-select first profile
+  useEffect(() => {
+    if (!activeProfileId && profiles.length > 0) {
+      setActiveProfileId(profiles[0].id);
+    }
+  }, [profiles, activeProfileId]);
+
+  // ── Local form state ──────────────────────────────────────────────────────
+  const [formProfile, setFormProfile] = useState<BrandProfile>({
     name: '',
     website: '',
     industry: '',
@@ -683,56 +716,144 @@ export default function BrandPage() {
     coreValues: [],
     lifePurpose: '',
     toneSettings: {
-      formality: 5,
-      enthusiasm: 5,
+      formality:   5,
+      enthusiasm:  5,
       technicality: 5,
-      humor: 3,
-      empathy: 7,
+      humor:       3,
+      empathy:     7,
     },
     preferredTerms: [],
-    bannedPhrases: [],
-    keyMessages: [],
+    bannedPhrases:  [],
+    keyMessages:    [],
     complianceNotes: '',
-    documents: [],
+    documents:   [],
     icpProfiles: [],
   });
 
+  // Sync form when active profile loads
+  useEffect(() => {
+    if (!activeProfile) return;
+    setFormProfile({
+      name:            activeProfile.name             ?? '',
+      website:         activeProfile.website          ?? '',
+      industry:        activeProfile.industry         ?? '',
+      description:     activeProfile.description      ?? '',
+      missionStatement: activeProfile.mission         ?? '',
+      likes:           activeProfile.likes            ?? [],
+      hates:           activeProfile.hates            ?? [],
+      dislikes:        activeProfile.dislikes         ?? [],
+      standsFor:       activeProfile.stands_for       ?? [],
+      standsAgainst:   activeProfile.stands_against   ?? [],
+      coreMotivations: activeProfile.core_motivations ?? [],
+      coreValues:      activeProfile.core_values      ?? [],
+      lifePurpose:     activeProfile.life_purpose     ?? '',
+      toneSettings: {
+        formality:    activeProfile.tone_formality    ?? 5,
+        enthusiasm:   activeProfile.tone_enthusiasm   ?? 5,
+        technicality: activeProfile.tone_technical    ?? 5,
+        humor:        activeProfile.tone_humor        ?? 3,
+        empathy:      activeProfile.tone_empathy      ?? 7,
+      },
+      preferredTerms:  activeProfile.preferred_terms  ?? [],
+      bannedPhrases:   activeProfile.banned_phrases   ?? [],
+      keyMessages:     activeProfile.key_messages     ?? [],
+      complianceNotes: activeProfile.compliance_notes ?? '',
+      documents:       [],
+      icpProfiles:     [],
+    });
+  }, [activeProfile]);
+
   const update = (key: keyof BrandProfile, value: unknown) => {
-    setProfile(p => ({ ...p, [key]: value }));
+    setFormProfile(p => ({ ...p, [key]: value }));
   };
+
+  // ── Save mutation ─────────────────────────────────────────────────────────
+  const saveMutation = useMutation({
+    mutationFn: async (data: BrandProfile) => {
+      const payload = {
+        name:             data.name,
+        website:          data.website,
+        industry:         data.industry,
+        description:      data.description,
+        mission:          data.missionStatement,
+        life_purpose:     data.lifePurpose,
+        likes:            data.likes,
+        hates:            data.hates,
+        dislikes:         data.dislikes,
+        stands_for:       data.standsFor,
+        stands_against:   data.standsAgainst,
+        core_motivations: data.coreMotivations,
+        core_values:      data.coreValues,
+        preferredTerms:   data.preferredTerms,
+        bannedPhrases:    data.bannedPhrases,
+        keyMessages:      data.keyMessages,
+        complianceNotes:  data.complianceNotes,
+        tone: {
+          formality:      data.toneSettings.formality,
+          enthusiasm:     data.toneSettings.enthusiasm,
+          technical:      data.toneSettings.technicality,
+          humor:          data.toneSettings.humor,
+          empathy:        data.toneSettings.empathy,
+        },
+      };
+
+      if (activeProfileId) {
+        return api.put(`/brand/${activeProfileId}`, payload);
+      } else {
+        return api.post('/brand', { ...payload, isDefault: true });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['brand-profiles'] });
+    },
+  });
+
+  // ── Create ICP mutation ───────────────────────────────────────────────────
+  const createIcpMutation = useMutation({
+    mutationFn: (icp: ICPProfile) => {
+      const profileId = activeProfileId ?? profiles[0]?.id;
+      if (!profileId) throw new Error('No brand profile selected');
+
+      return api.post(`/brand/${profileId}/icps`, {
+        name:                  icp.name,
+        basic_characteristics: icp.basicChars,
+        interests:             icp.interests,
+        current_challenges:    icp.currentChallenges,
+        emotional_motivations: icp.emotionalMotivations,
+        frustrations:          icp.frustrations,
+        goals:                 icp.goals,
+        information_sources:   icp.infoSources,
+        personality_scores:    icp.personalityScores,
+        positioning_strategy:  icp.positioningStrategy,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['icp-profiles-all'] });
+      setShowICPModal(false);
+    },
+  });
 
   const handleSaveICP = (icp: ICPProfile) => {
-    setProfile(p => ({
-      ...p,
-      icpProfiles: [...p.icpProfiles, icp]
-    }));
-    setShowICPModal(false);
+    createIcpMutation.mutate(icp);
   };
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      // await api.post('/brand', profile);
-      await new Promise(r => setTimeout(r, 800)); // Simulate
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } finally {
-      setSaving(false);
-    }
+  const handleSave = () => {
+    saveMutation.mutate(formProfile);
   };
 
   const TONE_SLIDERS = [
-    { key: 'formality', label: 'Formality', left: 'Casual', right: 'Formal' },
-    { key: 'enthusiasm', label: 'Enthusiasm', left: 'Reserved', right: 'Energetic' },
-    { key: 'technicality', label: 'Technicality', left: 'Simple', right: 'Technical' },
-    { key: 'humor', label: 'Humor', left: 'Serious', right: 'Playful' },
-    { key: 'empathy', label: 'Empathy', left: 'Direct', right: 'Empathetic' },
+    { key: 'formality',    label: 'Formality',    left: 'Casual',   right: 'Formal'     },
+    { key: 'enthusiasm',   label: 'Enthusiasm',   left: 'Reserved', right: 'Energetic'  },
+    { key: 'technicality', label: 'Technicality', left: 'Simple',   right: 'Technical'  },
+    { key: 'humor',        label: 'Humor',        left: 'Serious',  right: 'Playful'    },
+    { key: 'empathy',      label: 'Empathy',      left: 'Direct',   right: 'Empathetic' },
   ];
 
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#080809] text-white">
       <div className="max-w-4xl mx-auto px-6 py-10">
-        
+
         {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div>
@@ -743,21 +864,56 @@ export default function BrandPage() {
           </div>
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saveMutation.isPending}
             className="flex items-center gap-2 px-6 py-2.5 bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white font-medium rounded-xl transition-all"
           >
-            {saving ? (
+            {saveMutation.isPending ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 Saving...
               </>
-            ) : saved ? (
+            ) : saveMutation.isSuccess ? (
               <>✓ Saved</>
             ) : (
               <>Save Profile</>
             )}
           </button>
         </div>
+
+        {/* Profile Selector */}
+        {profiles.length > 1 && (
+          <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+            {profiles.map((p: { id: string; name: string }) => (
+              <button
+                key={p.id}
+                onClick={() => setActiveProfileId(p.id)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border ${
+                  activeProfileId === p.id
+                    ? 'bg-violet-600/20 border-violet-500 text-violet-300'
+                    : 'bg-white/5 border-white/10 text-gray-400 hover:border-white/20'
+                }`}
+              >
+                {p.name}
+              </button>
+            ))}
+            <button
+              onClick={() => {
+                setActiveProfileId(null);
+                setFormProfile(prev => ({ ...prev, name: '' }));
+              }}
+              className="px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all border bg-white/5 border-white/10 text-gray-400 hover:border-white/20"
+            >
+              + New Profile
+            </button>
+          </div>
+        )}
+
+        {/* Loading state */}
+        {brandsLoading && (
+          <div className="text-center py-12 text-gray-500">
+            Loading brand profile...
+          </div>
+        )}
 
         {/* Tab Navigation */}
         <div className="flex gap-1 p-1 bg-white/5 rounded-xl mb-8 border border-white/10">
@@ -786,25 +942,28 @@ export default function BrandPage() {
             transition={{ duration: 0.15 }}
             className="space-y-6"
           >
-
-            {/* ── Identity Tab ── */}
+            {/* Identity Tab */}
             {activeTab === 'identity' && (
               <div className="bg-white/3 border border-white/10 rounded-2xl p-6 space-y-5">
                 <h2 className="text-lg font-semibold">Core Identity</h2>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">Brand / Person Name *</label>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Brand / Person Name *
+                    </label>
                     <input
-                      value={profile.name}
+                      value={formProfile.name}
                       onChange={e => update('name', e.target.value)}
                       placeholder="e.g. Sameer Thakur or Acme Corp"
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:border-violet-500/50 outline-none transition-colors"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-400 mb-2">Website</label>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">
+                      Website
+                    </label>
                     <input
-                      value={profile.website}
+                      value={formProfile.website}
                       onChange={e => update('website', e.target.value)}
                       placeholder="https://yoursite.com"
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:border-violet-500/50 outline-none transition-colors"
@@ -812,18 +971,22 @@ export default function BrandPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">Industry</label>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Industry
+                  </label>
                   <input
-                    value={profile.industry}
+                    value={formProfile.industry}
                     onChange={e => update('industry', e.target.value)}
                     placeholder="e.g. SaaS, Marketing Agency, Consulting"
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:border-violet-500/50 outline-none transition-colors"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">Brand Description</label>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Brand Description
+                  </label>
                   <textarea
-                    value={profile.description}
+                    value={formProfile.description}
                     onChange={e => update('description', e.target.value)}
                     placeholder="What does your brand do? Who do you serve?"
                     rows={3}
@@ -831,9 +994,11 @@ export default function BrandPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-400 mb-2">Mission Statement</label>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">
+                    Mission Statement
+                  </label>
                   <textarea
-                    value={profile.missionStatement}
+                    value={formProfile.missionStatement}
                     onChange={e => update('missionStatement', e.target.value)}
                     placeholder="Why does your brand exist?"
                     rows={2}
@@ -845,9 +1010,9 @@ export default function BrandPage() {
                     Life Purpose / Brand Purpose
                   </label>
                   <textarea
-                    value={profile.lifePurpose}
+                    value={formProfile.lifePurpose}
                     onChange={e => update('lifePurpose', e.target.value)}
-                    placeholder="What is the deeper purpose — beyond revenue? What change do you want to create in the world?"
+                    placeholder="What is the deeper purpose beyond revenue?"
                     rows={3}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:border-violet-500/50 outline-none transition-colors resize-none"
                   />
@@ -855,7 +1020,7 @@ export default function BrandPage() {
               </div>
             )}
 
-            {/* ── Voice Tab ── */}
+            {/* Voice Tab — same as before but use formProfile */}
             {activeTab === 'voice' && (
               <div className="space-y-6">
                 <div className="bg-white/3 border border-white/10 rounded-2xl p-6 space-y-6">
@@ -865,23 +1030,25 @@ export default function BrandPage() {
                       <div className="flex justify-between items-center mb-2">
                         <span className="text-sm font-medium text-white">{label}</span>
                         <span className="text-xs text-violet-400 font-medium">
-                          {profile.toneSettings[key as keyof typeof profile.toneSettings]}/10
+                          {formProfile.toneSettings[key as keyof typeof formProfile.toneSettings]}/10
                         </span>
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-gray-500 w-16 text-right">{left}</span>
                         <input
-                          type="range"
-                          min={1}
-                          max={10}
-                          value={profile.toneSettings[key as keyof typeof profile.toneSettings]}
+                          type="range" min={1} max={10}
+                          value={formProfile.toneSettings[key as keyof typeof formProfile.toneSettings]}
                           onChange={e => update('toneSettings', {
-                            ...profile.toneSettings,
-                            [key]: Number(e.target.value)
+                            ...formProfile.toneSettings,
+                            [key]: Number(e.target.value),
                           })}
                           className="flex-1 h-2 rounded-full appearance-none cursor-pointer"
                           style={{
-                            background: `linear-gradient(to right, #7c3aed ${(profile.toneSettings[key as keyof typeof profile.toneSettings] - 1) * 11.1}%, rgba(255,255,255,0.1) ${(profile.toneSettings[key as keyof typeof profile.toneSettings] - 1) * 11.1}%)`
+                            background: `linear-gradient(to right, #7c3aed ${
+                              (formProfile.toneSettings[key as keyof typeof formProfile.toneSettings] - 1) * 11.1
+                            }%, rgba(255,255,255,0.1) ${
+                              (formProfile.toneSettings[key as keyof typeof formProfile.toneSettings] - 1) * 11.1
+                            }%)`
                           }}
                         />
                         <span className="text-xs text-gray-500 w-16">{right}</span>
@@ -889,26 +1056,25 @@ export default function BrandPage() {
                     </div>
                   ))}
                 </div>
-
                 <div className="bg-white/3 border border-white/10 rounded-2xl p-6 space-y-5">
                   <h2 className="text-lg font-semibold">Vocabulary Control</h2>
                   <TagInput
-                    label="Preferred Terms (words to use more)"
-                    tags={profile.preferredTerms}
+                    label="Preferred Terms"
+                    tags={formProfile.preferredTerms}
                     onChange={v => update('preferredTerms', v)}
                     placeholder="e.g. growth, founder, build"
                     color="green"
                   />
                   <TagInput
-                    label="Banned Phrases (never use these)"
-                    tags={profile.bannedPhrases}
+                    label="Banned Phrases"
+                    tags={formProfile.bannedPhrases}
                     onChange={v => update('bannedPhrases', v)}
                     placeholder="e.g. leverage, synergy, paradigm"
                     color="red"
                   />
                   <TagInput
-                    label="Key Messages (repeat these themes)"
-                    tags={profile.keyMessages}
+                    label="Key Messages"
+                    tags={formProfile.keyMessages}
                     onChange={v => update('keyMessages', v)}
                     placeholder="e.g. founders build the future"
                     color="violet"
@@ -918,9 +1084,8 @@ export default function BrandPage() {
                       Compliance Notes
                     </label>
                     <textarea
-                      value={profile.complianceNotes}
+                      value={formProfile.complianceNotes}
                       onChange={e => update('complianceNotes', e.target.value)}
-                      placeholder="Any legal, regulatory, or industry-specific restrictions..."
                       rows={3}
                       className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:border-violet-500/50 outline-none resize-none transition-colors"
                     />
@@ -929,91 +1094,43 @@ export default function BrandPage() {
               </div>
             )}
 
-            {/* ── Values Tab (NEW) ── */}
+            {/* Values Tab */}
             {activeTab === 'values' && (
               <div className="space-y-6">
                 <div className="bg-white/3 border border-white/10 rounded-2xl p-6 space-y-5">
-                  <h2 className="text-lg font-semibold">What the Brand Loves & Hates</h2>
-                  <p className="text-sm text-gray-500">
-                    These inform content perspective, topics to champion or avoid.
-                  </p>
-                  <TagInput
-                    label="❤️ Likes (topics, ideas, approaches the brand loves)"
-                    tags={profile.likes}
-                    onChange={v => update('likes', v)}
-                    placeholder="e.g. transparency, builder culture, long-term thinking"
-                    color="green"
-                  />
-                  <TagInput
-                    label="😤 Hates (strong oppositions)"
-                    tags={profile.hates}
-                    onChange={v => update('hates', v)}
-                    placeholder="e.g. corporate jargon, shortcuts, fake gurus"
-                    color="red"
-                  />
-                  <TagInput
-                    label="😒 Dislikes (mild oppositions)"
-                    tags={profile.dislikes}
-                    onChange={v => update('dislikes', v)}
-                    placeholder="e.g. over-automation, vanity metrics"
-                    color="amber"
-                  />
+                  <h2 className="text-lg font-semibold">Loves & Hates</h2>
+                  <TagInput label="❤️ Likes" tags={formProfile.likes} onChange={v => update('likes', v)} color="green" />
+                  <TagInput label="😤 Hates" tags={formProfile.hates} onChange={v => update('hates', v)} color="red" />
+                  <TagInput label="😒 Dislikes" tags={formProfile.dislikes} onChange={v => update('dislikes', v)} color="amber" />
                 </div>
-
                 <div className="bg-white/3 border border-white/10 rounded-2xl p-6 space-y-5">
-                  <h2 className="text-lg font-semibold">Positions & Beliefs</h2>
-                  <TagInput
-                    label="✊ Stands For (principles championed)"
-                    tags={profile.standsFor}
-                    onChange={v => update('standsFor', v)}
-                    placeholder="e.g. founder freedom, merit over pedigree"
-                    color="green"
-                  />
-                  <TagInput
-                    label="🚫 Stands Against (rejected ideas)"
-                    tags={profile.standsAgainst}
-                    onChange={v => update('standsAgainst', v)}
-                    placeholder="e.g. hustle culture, exploitative pricing"
-                    color="red"
-                  />
+                  <h2 className="text-lg font-semibold">Positions</h2>
+                  <TagInput label="✊ Stands For" tags={formProfile.standsFor} onChange={v => update('standsFor', v)} color="green" />
+                  <TagInput label="🚫 Stands Against" tags={formProfile.standsAgainst} onChange={v => update('standsAgainst', v)} color="red" />
                 </div>
-
                 <div className="bg-white/3 border border-white/10 rounded-2xl p-6 space-y-5">
                   <h2 className="text-lg font-semibold">Core Motivations & Values</h2>
-                  <TagInput
-                    label="⚡ Core Motivations (what drives the brand daily)"
-                    tags={profile.coreMotivations}
-                    onChange={v => update('coreMotivations', v)}
-                    placeholder="e.g. democratizing knowledge, proving the model"
-                    color="violet"
-                  />
-                  <TagInput
-                    label="💎 Core Values (non-negotiable principles)"
-                    tags={profile.coreValues}
-                    onChange={v => update('coreValues', v)}
-                    placeholder="e.g. honesty, craftsmanship, respect for time"
-                    color="blue"
-                  />
+                  <TagInput label="⚡ Core Motivations" tags={formProfile.coreMotivations} onChange={v => update('coreMotivations', v)} color="violet" />
+                  <TagInput label="💎 Core Values" tags={formProfile.coreValues} onChange={v => update('coreValues', v)} color="blue" />
                 </div>
               </div>
             )}
 
-            {/* ── Documents Tab ── */}
+            {/* Documents Tab — same as before */}
             {activeTab === 'documents' && (
               <div className="bg-white/3 border border-white/10 rounded-2xl p-6">
                 <h2 className="text-lg font-semibold mb-2">Brand Documents</h2>
                 <p className="text-sm text-gray-500 mb-6">
-                  Upload brand guidelines, tone of voice docs, style guides — 
-                  the AI will extract and apply context from these.
+                  Upload brand guidelines, tone docs, style guides.
                 </p>
                 <DocumentUploader
-                  documents={profile.documents}
+                  documents={formProfile.documents}
                   onDocumentsChange={v => update('documents', v)}
                 />
               </div>
             )}
 
-            {/* ── ICP Tab ── */}
+            {/* ICP Tab */}
             {activeTab === 'icp' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -1031,13 +1148,10 @@ export default function BrandPage() {
                   </button>
                 </div>
 
-                {profile.icpProfiles.length === 0 ? (
+                {icpProfiles.length === 0 ? (
                   <div className="bg-white/3 border border-dashed border-white/10 rounded-2xl p-12 text-center">
                     <div className="text-5xl mb-4">🎯</div>
                     <p className="text-white font-medium">No ICP profiles yet</p>
-                    <p className="text-gray-500 text-sm mt-2">
-                      Create your first ICP using the SIRF framework
-                    </p>
                     <button
                       onClick={() => setShowICPModal(true)}
                       className="mt-6 px-6 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-xl transition-all inline-block"
@@ -1047,7 +1161,7 @@ export default function BrandPage() {
                   </div>
                 ) : (
                   <div className="grid gap-4">
-                    {profile.icpProfiles.map(icp => (
+                    {icpProfiles.map((icp: any) => (
                       <div
                         key={icp.id}
                         className="p-5 bg-white/3 border border-white/10 hover:border-violet-500/30 rounded-2xl transition-all"
@@ -1056,35 +1170,11 @@ export default function BrandPage() {
                           <div>
                             <h3 className="font-semibold text-white">{icp.name}</h3>
                             <p className="text-sm text-gray-500 mt-1">
-                              {[icp.basicChars.role, icp.basicChars.industry, icp.basicChars.seniority]
-                                .filter(Boolean).join(' • ')}
+                              {[
+                                icp.basic_characteristics?.role,
+                                icp.basic_characteristics?.industry,
+                              ].filter(Boolean).join(' • ')}
                             </p>
-                            <div className="flex flex-wrap gap-2 mt-3">
-                              {icp.currentChallenges.slice(0, 3).map((c, i) => (
-                                <span key={i} className="px-2 py-1 bg-red-500/15 text-red-400 text-xs rounded-full border border-red-500/20">
-                                  {c}
-                                </span>
-                              ))}
-                              {icp.goals.slice(0, 2).map((g, i) => (
-                                <span key={i} className="px-2 py-1 bg-green-500/15 text-green-400 text-xs rounded-full border border-green-500/20">
-                                  {g}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button className="text-xs text-gray-500 hover:text-white transition-colors px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/20">
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => setProfile(p => ({
-                                ...p,
-                                icpProfiles: p.icpProfiles.filter(i => i.id !== icp.id)
-                              }))}
-                              className="text-xs text-gray-500 hover:text-red-400 transition-colors px-3 py-1.5 rounded-lg border border-white/10 hover:border-red-500/30"
-                            >
-                              Delete
-                            </button>
                           </div>
                         </div>
                       </div>
@@ -1097,7 +1187,6 @@ export default function BrandPage() {
         </AnimatePresence>
       </div>
 
-      {/* ICP Modal */}
       <AnimatePresence>
         {showICPModal && (
           <ICPBuilderModal

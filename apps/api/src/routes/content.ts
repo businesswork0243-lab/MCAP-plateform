@@ -213,17 +213,24 @@ function buildSpecialInstructions(data: z.infer<typeof createRequestSchema>): st
 contentRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { page = '1', limit = '20', status, clientId } = req.query;
-    const pageNum = Math.max(1, parseInt(page as string) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 20));
-    const offset = (pageNum - 1) * limitNum;
-    
-    const params: unknown[] = [req.user!.organizationId, limitNum, offset];
-    let filters = '';
-    
-    if (status) filters += ` AND cr.status = $${params.push(status)}`;
-    if (clientId) filters += ` AND cr.client_id = $${params.push(clientId)}`;
 
-    // ✅ FIXED: Safe COALESCE for missing fields
+    const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 20));
+    const offset = (pageNum - 1) * limitNum;
+
+    const filterParams: unknown[] = [req.user!.organizationId];
+    let whereClause = `WHERE cr.organization_id = $1`;
+
+    if (status) {
+      filterParams.push(status);
+      whereClause += ` AND cr.status = $${filterParams.length}`;
+    }
+
+    if (clientId) {
+      filterParams.push(clientId);
+      whereClause += ` AND cr.client_id = $${filterParams.length}`;
+    }
+
     const requests = await query(
       `SELECT 
          cr.id,
@@ -243,19 +250,18 @@ contentRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise
        LEFT JOIN users u ON u.id = cr.created_by
        LEFT JOIN clients c ON c.id = cr.client_id
        LEFT JOIN brand_profiles bp ON bp.id = cr.brand_profile_id
-       WHERE cr.organization_id = $1 ${filters}
+       ${whereClause}
        ORDER BY cr.created_at DESC
-       LIMIT $2 OFFSET $3`,
-      params
+       LIMIT $${filterParams.length + 1}
+       OFFSET $${filterParams.length + 2}`,
+      [...filterParams, limitNum, offset]
     );
 
     const countResult = await queryOne<{ count: string }>(
-      `SELECT COUNT(*) FROM content_requests 
-       WHERE organization_id = $1 ${filters.replace(/\$\d+/g, (m) => {
-         const idx = parseInt(m.slice(1));
-         return idx > 2 ? `$${idx - 2}` : m;
-       })}`,
-      [req.user!.organizationId, ...params.slice(3)]
+      `SELECT COUNT(*) as count
+       FROM content_requests cr
+       ${whereClause}`,
+      filterParams
     );
 
     res.json({
@@ -263,8 +269,8 @@ contentRouter.get('/', async (req: AuthenticatedRequest, res: Response): Promise
       pagination: {
         page: pageNum,
         limit: limitNum,
-        total: parseInt(countResult?.count || '0'),
-      }
+        total: parseInt(countResult?.count || '0', 10),
+      },
     });
   } catch (err) {
     logger.error('GET /content error:', { error: err });

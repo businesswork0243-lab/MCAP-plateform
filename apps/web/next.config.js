@@ -26,9 +26,9 @@ const nextConfig = {
   images: {
     remotePatterns: [
       { protocol: 'http', hostname: 'localhost' },
-      { protocol: 'https', hostname: '*.railway.app' },
-      { protocol: 'https', hostname: '*.vercel.app' },
-      { protocol: 'https', hostname: '*.railway.internal' },
+      { protocol: 'https', hostname: '**.railway.app' },
+      { protocol: 'https', hostname: '**.onrender.com' },
+      { protocol: 'https', hostname: '**.vercel.app' },
     ],
   },
 

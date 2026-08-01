@@ -1,4 +1,4 @@
-﻿-- Migration 005: Fix Missing Columns
+-- Migration 005: Fix Missing Columns
 
 -- content_requests: Add missing columns
 ALTER TABLE content_requests
@@ -104,5 +104,6 @@ CREATE TRIGGER trg_agent_executions_sync
   BEFORE INSERT OR UPDATE ON agent_executions
   FOR EACH ROW EXECUTE FUNCTION sync_execution_columns();
 
--- Clean failed content
-DELETE FROM content_requests WHERE status = 'generation_failed';
+-- IMPORTANT:
+-- Do not delete failed content rows in a schema migration.
+-- These records are useful for debugging, audit history, and retry visibility.

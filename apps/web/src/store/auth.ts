@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import api from '@/lib/api';
+import { AxiosError } from 'axios';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,6 +45,19 @@ interface AuthState {
   setAuth:      (data: { user: User; accessToken: string; refreshToken: string }) => void;
   setUser:      (user: User | null) => void;
   clearAuth:    () => void;
+}
+
+function getApiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof AxiosError) {
+    const apiMessage =
+      (err.response?.data as { error?: string; message?: string })?.message ||
+      (err.response?.data as { error?: string; message?: string })?.error;
+
+    return apiMessage || err.message || fallback;
+  }
+
+  if (err instanceof Error) return err.message;
+  return fallback;
 }
 
 // ─── Auth Store ───────────────────────────────────────────────────────────────
@@ -101,10 +115,7 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
         } catch (err) {
-          const message = err instanceof Error
-            ? err.message
-            : 'Login failed. Check your credentials.';
-
+          const message = getApiErrorMessage(err, 'Login failed. Check your credentials.');
           set({ isLoading: false, error: message, user: null, accessToken: null });
           throw err;
         }
@@ -132,8 +143,8 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           });
         } catch (err) {
-          const message = err instanceof Error ? err.message : 'Registration failed';
-          set({ isLoading: false, error: message });
+          const message = getApiErrorMessage(err, 'Registration failed');
+          set({ isLoading: false, error: message, user: null, accessToken: null });
           throw err;
         }
       },
@@ -156,28 +167,37 @@ export const useAuthStore = create<AuthState>()(
 
       // ── Fetch Me ──────────────────────────────────────────────────────────────
       fetchMe: async () => {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+        const token =
+          typeof window !== 'undefined'
+            ? localStorage.getItem('accessToken')
+            : null;
+
         if (!token) return;
 
         try {
           const { data } = await api.get<User>('/auth/me');
-          set({ user: data });
-        } catch (err: any) {
-          if (err?.message?.includes('TOKEN_EXPIRED') || err?.message?.includes('expired')) {
-            const refreshed = await get().refreshToken();
-            if (refreshed) {
-              const { data } = await api.get<User>('/auth/me');
-              set({ user: data });
-              return;
+          set({ user: data, error: null });
+        } catch (err) {
+          if (err instanceof AxiosError) {
+            const status = err.response?.status;
+            const code = (err.response?.data as { code?: string })?.code;
+
+            if (status === 401 && code === 'TOKEN_EXPIRED') {
+              const refreshed = await get().refreshToken();
+              if (refreshed) {
+                const { data } = await api.get<User>('/auth/me');
+                set({ user: data, error: null });
+                return;
+              }
             }
           }
 
-          // Force clear auth on general error
           if (typeof window !== 'undefined') {
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
           }
-          set({ user: null, accessToken: null });
+
+          set({ user: null, accessToken: null, error: null });
         }
       },
 
