@@ -7,9 +7,11 @@ import { query, queryOne, withTransaction } from '../db/connection'
 import { AuthenticatedRequest, authenticate } from '../middleware/auth'
 import { addContentJob } from '../jobs/queue'
 import { logger } from '../lib/logger'
+import { bulkRouter } from './bulk'
 
 export const contentRouter = Router()
 contentRouter.use(authenticate)
+contentRouter.use('/bulk', bulkRouter)
 export default contentRouter
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────

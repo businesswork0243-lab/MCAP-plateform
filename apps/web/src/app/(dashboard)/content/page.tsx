@@ -228,12 +228,20 @@ export default function ContentLibraryPage() {
               {pagination.total} piece{pagination.total !== 1 ? 's' : ''} total
             </p>
           </div>
-          <Link
-            href="/content/new"
-            className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-xl transition-all"
-          >
-            ✦ New Content
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/content/bulk"
+              className="flex items-center gap-2 px-4 py-2.5 border border-white/15 bg-white/5 hover:bg-white/10 text-white text-sm font-medium rounded-xl transition-all"
+            >
+              📊 Bulk Upload
+            </Link>
+            <Link
+              href="/content/new"
+              className="flex items-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-700 text-white text-sm font-medium rounded-xl transition-all shadow-lg shadow-violet-600/20"
+            >
+              ✦ New Content
+            </Link>
+          </div>
         </div>
 
         {/* Filters */}
