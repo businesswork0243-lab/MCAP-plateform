@@ -389,14 +389,20 @@ async def run(
 ) -> dict:
     """
     Humanize content with aggressive false negative removal + Rule Engine pass.
-
-    Pipeline:
-      1. Pre-scan for AI patterns
-      2. LLM humanization with detection-aware prompt
-      3. Deterministic cleanup pass (text_cleaner)
-      4. Optional second pass if false negatives remain
-      5. Rule Engine pass
     """
+    import traceback as _tb
+
+    # ── Input validation ──────────────────────────────────────────────────────
+    if not content or not isinstance(content, str):
+        log.error("Humanizer received invalid content: type=%s", type(content))
+        return {
+            "content":    str(content) if content else "",  # noqa
+            "tokensUsed": 0,
+            "agent":      "humanizer",
+            "intensity":  intensity,
+            "metadata":   {"error": "invalid_input", "rule_engine": {"enabled": False}},
+        }
+
     # ── Validate intensity ────────────────────────────────────────────────────
     if intensity not in INTENSITY_RULES:
         log.warning("Invalid intensity '%s' — defaulting to medium", intensity)
@@ -407,15 +413,21 @@ async def run(
     temp_val           = rules_config["temperature"]
     second_pass_enabled = rules_config["second_pass"]
 
-    # ── Pre-scan ──────────────────────────────────────────────────────────────
-    pre_detections = detect_all_patterns(content)
-    detection_block = _build_detection_block(content)
+    # ── Pre-scan (safe) ───────────────────────────────────────────────────────
+    try:
+        pre_detections = detect_all_patterns(content)
+        detection_block = _build_detection_block(content)
+    except Exception as e:
+        log.warning("Pre-scan failed, continuing: %s", e)
+        pre_detections = {"total_issues": 0, "false_negative_count": 0,
+                          "ai_openings": 0, "hedging": 0, "buzzwords": 0, "transitions": 0}
+        detection_block = "PRE-SCAN: Skipped due to error."
 
     # ── Banned phrases ────────────────────────────────────────────────────────
     all_banned = list(BANNED_AI_PHRASES)
     if brand_phrases:
         for phrase in brand_phrases:
-            if phrase not in all_banned:
+            if phrase and phrase not in all_banned:
                 all_banned.append(phrase)
 
     banned_block = "\n".join(f"  • {p}" for p in all_banned)
@@ -423,18 +435,20 @@ async def run(
 
     # ── Tonality block ────────────────────────────────────────────────────────
     tonality_lines = []
-    if tonality:
-        active = [
-            (k, v) for k, v in tonality.items()
-            if v >= 5 and k in TONALITY_HUMANIZE_RULES
-        ]
-        active.sort(key=lambda x: x[1], reverse=True)
-
-        if active:
-            tonality_lines.append("TONALITY TO REFLECT IN HUMANIZATION:")
-            for tone, val in active[:4]:
-                rule = TONALITY_HUMANIZE_RULES[tone]
-                tonality_lines.append(f"  • {tone.upper()} ({val}/10): {rule}")
+    if tonality and isinstance(tonality, dict):
+        try:
+            active = [
+                (k, v) for k, v in tonality.items()
+                if isinstance(v, (int, float)) and v >= 5 and k in TONALITY_HUMANIZE_RULES
+            ]
+            active.sort(key=lambda x: x[1], reverse=True)
+            if active:
+                tonality_lines.append("TONALITY TO REFLECT IN HUMANIZATION:")
+                for tone, val in active[:4]:
+                    rule = TONALITY_HUMANIZE_RULES[tone]
+                    tonality_lines.append(f"  • {tone.upper()} ({val}/10): {rule}")
+        except Exception as e:
+            log.warning("Tonality processing failed: %s", e)
 
     tonality_block = "\n".join(tonality_lines) if tonality_lines else ""
 
@@ -451,85 +465,114 @@ async def run(
     max_tok = min(int(content_words * 1.5) + 600, 6000)
 
     log.info(
-        "Humanizer start | intensity=%s | words=%d | lang=%s | "
-        "pre_issues=%d (false_negs=%d) | tonality_active=%s",
-        intensity, content_words, language,
-        pre_detections["total_issues"],
-        pre_detections["false_negative_count"],
-        [k for k, v in (tonality or {}).items() if v >= 5],
+        "Humanizer start | intensity=%s | words=%d | lang=%s | pre_issues=%d",
+        intensity, content_words, language, pre_detections["total_issues"],
     )
 
     # ── Pass 1: LLM Humanization ──────────────────────────────────────────────
-    user_prompt_text = USER_TEMPLATE.format(
-        content=content,
-        intensity_upper=intensity.upper(),
-        description=f"Goal: {rules_config['description']}",
-        rules_block=rules_block,
-        detection_block=detection_block,
-        banned_block=banned_block,
-        tonality_block=tonality_block,
-        language_block=language_block,
-    )
+    try:
+        user_prompt_text = USER_TEMPLATE.format(
+            content=content,
+            intensity_upper=intensity.upper(),
+            description=f"Goal: {rules_config['description']}",
+            rules_block=rules_block,
+            detection_block=detection_block,
+            banned_block=banned_block,
+            tonality_block=tonality_block,
+            language_block=language_block,
+        )
 
-    humanized, tokens_p1 = await complete(
-        SYSTEM,
-        user_prompt_text,
-        temperature=temp_val,
-        max_tokens=max_tok,
-    )
+        humanized, tokens_p1 = await complete(
+            SYSTEM,
+            user_prompt_text,
+            temperature=temp_val,
+            max_tokens=max_tok,
+        )
+    except Exception as e:
+        log.error("Humanizer LLM call FAILED: %s\n%s", e, _tb.format_exc())
+        # Fallback: return original content
+        return {
+            "content":    content,
+            "tokensUsed": 0,
+            "agent":      "humanizer",
+            "intensity":  intensity,
+            "metadata": {
+                "error": f"llm_failed: {type(e).__name__}: {str(e)[:200]}",
+                "rule_engine": {"enabled": False, "reason": "humanizer_llm_failed"},
+            },
+        }
+
+    if not humanized or not isinstance(humanized, str):
+        log.error("Humanizer LLM returned empty/invalid content")
+        return {
+            "content":    content,
+            "tokensUsed": tokens_p1,
+            "agent":      "humanizer",
+            "intensity":  intensity,
+            "metadata": {"error": "empty_llm_response",
+                         "rule_engine": {"enabled": False}},
+        }
 
     total_tokens = tokens_p1
 
     # ── Pass 2: Deterministic Cleanup ─────────────────────────────────────────
-    cleanup_result = clean_ai_patterns(humanized, intensity=intensity)
-    humanized      = cleanup_result["content"]
+    try:
+        cleanup_result = clean_ai_patterns(humanized, intensity=intensity)
+        humanized      = cleanup_result["content"]
+    except Exception as e:
+        log.warning("Cleanup pass failed, continuing: %s", e)
+        cleanup_result = {"content": humanized, "detections": {"before": {}, "after": {}}}
 
     # ── Pass 3: Second LLM Pass (only if false negatives remain) ─────────────
-    post_scan    = detect_false_negatives(humanized)
-    tokens_p2    = 0
+    tokens_p2       = 0
     second_pass_run = False
 
-    if second_pass_enabled and len(post_scan) > 0:
-        log.info("Second pass triggered | remaining_false_negs=%d", len(post_scan))
-        second_pass_run = True
+    try:
+        post_scan = detect_false_negatives(humanized)
 
-        second_pass_user = (
-            f"The text below still contains {len(post_scan)} false negative(s).\n\n"
-            f"DETECTED PATTERNS TO FIX:\n"
-            + "\n".join(f"  - '{f['match']}'" for f in post_scan[:5])
-            + f"\n\nRewrite ONLY the sentences containing these patterns.\n"
-            f"Convert each to a direct positive assertion.\n"
-            f"Keep everything else unchanged.\n\n"
-            f"TEXT:\n{humanized}\n\nOutput only the fixed text."
-        )
+        if second_pass_enabled and len(post_scan) > 0:
+            log.info("Second pass triggered | remaining_false_negs=%d", len(post_scan))
+            second_pass_run = True
 
-        humanized_p2, tokens_p2 = await complete(
-            SECOND_PASS_SYSTEM,
-            second_pass_user,
-            temperature=0.5,
-            max_tokens=max_tok,
-        )
+            second_pass_user = (
+                f"The text below still contains {len(post_scan)} false negative(s).\n\n"
+                f"DETECTED PATTERNS TO FIX:\n"
+                + "\n".join(f"  - '{f['match']}'" for f in post_scan[:5])
+                + f"\n\nRewrite ONLY the sentences containing these patterns.\n"
+                f"Convert each to a direct positive assertion.\n"
+                f"Keep everything else unchanged.\n\n"
+                f"TEXT:\n{humanized}\n\nOutput only the fixed text."
+            )
 
-        # ✅ Only use second pass if it actually improved things
-        p2_scan = detect_false_negatives(humanized_p2)
-        if len(p2_scan) < len(post_scan):
-            humanized = humanized_p2
-            cleanup_result2 = clean_ai_patterns(humanized, intensity=intensity)
-            humanized = cleanup_result2["content"]
-        else:
-            log.warning("Second pass did not improve — using first pass result")
+            humanized_p2, tokens_p2 = await complete(
+                SECOND_PASS_SYSTEM,
+                second_pass_user,
+                temperature=0.5,
+                max_tokens=max_tok,
+            )
 
-        total_tokens += tokens_p2
+            if humanized_p2 and isinstance(humanized_p2, str):
+                p2_scan = detect_false_negatives(humanized_p2)
+                if len(p2_scan) < len(post_scan):
+                    humanized = humanized_p2
+                    try:
+                        cleanup_result2 = clean_ai_patterns(humanized, intensity=intensity)
+                        humanized = cleanup_result2["content"]
+                    except Exception as e:
+                        log.warning("Second cleanup pass failed: %s", e)
+                else:
+                    log.warning("Second pass did not improve — using first pass result")
 
-    # ── Rule Engine ───────────────────────────────────────────────────────────
-    rule_engine_meta: dict = {}
+            total_tokens += tokens_p2
+    except Exception as e:
+        log.warning("Second pass failed, using first pass result: %s", e)
+
+    # ── Rule Engine (isolated failure) ────────────────────────────────────────
+    rule_engine_meta: dict = {"enabled": False}
 
     try:
         req_id = request_id or str(uuid.uuid4())
-
-        # ✅ FIX: Lazy load Rule Engine
         engine = _get_rule_engine()
-
         safe_brand_data = brand_data or {}
 
         re_result = await engine.process(
@@ -540,66 +583,67 @@ async def run(
             request_id=req_id,
         )
 
-        humanized = re_result.final_content
+        # Only use Rule Engine output if it succeeded
+        if re_result and hasattr(re_result, 'final_content') and re_result.final_content:
+            humanized = re_result.final_content
 
-        static_val       = re_result.static_validation
-        static_score     = static_val.static_score  if static_val else 0.0
-        dynamic_score    = static_val.dynamic_score if static_val else 0.0
-        passed           = static_val.passed        if static_val else False
-        violations_count = len(static_val.violations)      if static_val else 0
-        category_breakdown = static_val.category_breakdown if static_val else {}
+            static_val         = re_result.static_validation
+            static_score       = static_val.static_score  if static_val else 0.0
+            dynamic_score      = static_val.dynamic_score if static_val else 0.0
+            passed             = static_val.passed        if static_val else False
+            violations_count   = len(static_val.violations)      if static_val else 0
+            category_breakdown = static_val.category_breakdown if static_val else {}
 
-        rule_engine_meta = {
-            "enabled":                    True,
-            "final_score":                re_result.final_score,
-            "static_score":               static_score,
-            "dynamic_score":              dynamic_score,
-            "passed":                     passed,
-            "total_iterations":           re_result.total_iterations,
-            "false_negatives_eliminated": re_result.false_negatives_eliminated,
-            "dynamic_rules_generated":    len(re_result.dynamic_rules.rules),
-            "violations_remaining":       violations_count,
-            "category_breakdown":         category_breakdown,
-            "improvement_log":            re_result.improvement_log,
-            "processing_ms":              re_result.processing_time_ms,
-        }
+            rule_engine_meta = {
+                "enabled":                    True,
+                "final_score":                re_result.final_score,
+                "static_score":               static_score,
+                "dynamic_score":              dynamic_score,
+                "passed":                     passed,
+                "total_iterations":           re_result.total_iterations,
+                "false_negatives_eliminated": re_result.false_negatives_eliminated,
+                "dynamic_rules_generated":    len(re_result.dynamic_rules.rules),
+                "violations_remaining":       violations_count,
+                "category_breakdown":         category_breakdown,
+                "improvement_log":            re_result.improvement_log,
+                "processing_ms":              re_result.processing_time_ms,
+            }
 
-        log.info(
-            "Rule Engine complete | score=%.1f%% "
-            "(static=%.1f%%, dynamic=%.1f%%) | "
-            "passed=%s | iterations=%d",
-            re_result.final_score,
-            static_score,
-            dynamic_score,
-            passed,
-            re_result.total_iterations,
-        )
+            log.info(
+                "Rule Engine complete | score=%.1f%% | passed=%s | iterations=%d",
+                re_result.final_score, passed, re_result.total_iterations,
+            )
+        else:
+            log.warning("Rule Engine returned empty result — skipping")
+            rule_engine_meta = {"enabled": True, "skipped": "empty_result"}
 
     except Exception as e:
-        log.error("Rule Engine failed: %s", e)
-        rule_engine_meta = {"enabled": True, "error": str(e)}
+        log.error("Rule Engine FAILED (non-fatal): %s\n%s", e, _tb.format_exc())
+        rule_engine_meta = {
+            "enabled": True,
+            "error": f"{type(e).__name__}: {str(e)[:200]}",
+        }
 
-    # ── Final metrics ─────────────────────────────────────────────────────────
-    final_detections = detect_all_patterns(humanized)
-
-    pre_total  = pre_detections["total_issues"]
-    post_total = final_detections["total_issues"]
-    reduction_pct = round(
-        ((pre_total - post_total) / pre_total * 100)
-        if pre_total > 0 else 100.0,
-        1,
-    )
+    # ── Final metrics (safe) ──────────────────────────────────────────────────
+    try:
+        final_detections = detect_all_patterns(humanized)
+        pre_total  = pre_detections["total_issues"]
+        post_total = final_detections["total_issues"]
+        reduction_pct = round(
+            ((pre_total - post_total) / pre_total * 100)
+            if pre_total > 0 else 100.0, 1,
+        )
+    except Exception as e:
+        log.warning("Final metrics failed: %s", e)
+        final_detections = {"total_issues": 0, "false_negative_count": 0}
+        pre_total, post_total, reduction_pct = 0, 0, 0
 
     log.info(
-        "Humanizer complete | intensity=%s | tokens=%d (p1=%d, p2=%d) | "
-        "pre_issues=%d | post_issues=%d | reduction=%.1f%% | "
-        "false_negs: %d → %d | second_pass=%s",
-        intensity, total_tokens, tokens_p1, tokens_p2,
-        pre_total, post_total, reduction_pct,
-        pre_detections["false_negative_count"],
-        final_detections["false_negative_count"],
-        second_pass_run,
+        "Humanizer complete | intensity=%s | tokens=%d (p1=%d, p2=%d) | reduction=%.1f%%",
+        intensity, total_tokens, tokens_p1, tokens_p2, reduction_pct,
     )
+
+    cleanup_detections: dict = cleanup_result.get("detections", {}) if isinstance(cleanup_result.get("detections"), dict) else {}
 
     return {
         "content":    humanized,
@@ -610,11 +654,11 @@ async def run(
             "pre_issues":           pre_total,
             "post_issues":          post_total,
             "reduction_percent":    reduction_pct,
-            "false_negatives_pre":  pre_detections["false_negative_count"],
-            "false_negatives_post": final_detections["false_negative_count"],
+            "false_negatives_pre":  pre_detections.get("false_negative_count", 0),
+            "false_negatives_post": final_detections.get("false_negative_count", 0),
             "second_pass_run":      second_pass_run,
-            "detections_before":    cleanup_result["detections"]["before"],
-            "detections_after":     cleanup_result["detections"]["after"],
+            "detections_before":    cleanup_detections.get("before", {}),
+            "detections_after":     cleanup_detections.get("after", {}),
             "rule_engine":          rule_engine_meta,
         },
     }

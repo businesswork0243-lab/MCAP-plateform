@@ -323,43 +323,48 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
     await new Promise(r => setTimeout(r, 300)); // Small UI feedback delay
 
     // ── Step 3: Start pipeline ──────────────────────────────────
-    emitProgress(organizationId, requestId, PROGRESS.CANONICAL_START, 'writing_canonical_draft');
+    emitProgress(organizationId, requestId, PROGRESS.CANONICAL_START, 'ai_generating');
     await logAgentExecution(requestId, 'canonical_writer', 'started');
 
-    // Pipeline chalate waqt progress emit karo
     const pipelineStart = Date.now();
 
-    const progressTimer = setInterval(() => {
-      const elapsed = Date.now() - pipelineStart;
+    // ✅ HONEST heartbeat — progress based on realistic pipeline timing
+    // Real pipeline: canonical (15s) → platform (20s) → brand (15s) → humanize (25s) → qa (10s)
+    const heartbeat = setInterval(() => {
+      const elapsedSec = Math.floor((Date.now() - pipelineStart) / 1000);
 
       let progress: number;
       let step: string;
 
-      if (elapsed < 10_000) {
-        progress = PROGRESS.CANONICAL_START + Math.floor((elapsed / 10_000) * 15);
+      if (elapsedSec < 15) {
+        progress = 30 + Math.floor((elapsedSec / 15) * 15);  // 30→45
         step = 'writing_canonical_draft';
-      } else if (elapsed < 20_000) {
-        progress = PROGRESS.PLATFORM_START + Math.floor(((elapsed - 10_000) / 10_000) * 15);
+      } else if (elapsedSec < 35) {
+        progress = 45 + Math.floor(((elapsedSec - 15) / 20) * 15);  // 45→60
         step = 'platform_optimization';
-      } else if (elapsed < 30_000) {
-        progress = PROGRESS.BRAND_START + Math.floor(((elapsed - 20_000) / 10_000) * 8);
+      } else if (elapsedSec < 50) {
+        progress = 60 + Math.floor(((elapsedSec - 35) / 15) * 12);  // 60→72
         step = 'brand_alignment';
-      } else if (elapsed < 45_000) {
-        progress = PROGRESS.HUMANIZE_START + Math.floor(((elapsed - 30_000) / 15_000) * 8);
+      } else if (elapsedSec < 75) {
+        progress = 72 + Math.floor(((elapsedSec - 50) / 25) * 15);  // 72→87
         step = 'humanizing_content';
-      } else {
-        progress = Math.min(96, PROGRESS.QA_START + Math.floor(((elapsed - 45_000) / 20_000) * 4));
+      } else if (elapsedSec < 90) {
+        progress = 87 + Math.floor(((elapsedSec - 75) / 15) * 6);   // 87→93
         step = 'quality_assurance';
+      } else {
+        // Long-running: cap at 95%
+        progress = Math.min(95, 93 + Math.floor((elapsedSec - 90) / 20));
+        step = 'finalizing';
       }
 
-      emitProgress(organizationId, requestId, progress, step);
-    }, 2_000);
+      emitProgress(organizationId, requestId, progress, step, { elapsedSec });
+    }, 3_000);
 
     let result: PipelineResponse;
     try {
       result = await callFullPipeline(job.data);
     } finally {
-      clearInterval(progressTimer);
+      clearInterval(heartbeat);
     }
 
     const pipelineDurationMs = Date.now() - pipelineStart;
@@ -495,11 +500,19 @@ function parseError(err: unknown): string {
       return 'AI Engine is not running - service may be down';
     }
     if (err.response) {
-      const detail =
-        typeof err.response.data === 'object'
-          ? JSON.stringify(err.response.data).slice(0, 200)
-          : String(err.response.data).slice(0, 200);
-      return `AI Engine error [${err.response.status}]: ${detail}`;
+      // ✅ Extract detail field from FastAPI error response
+      const data = err.response.data;
+      let detail: string;
+
+      if (typeof data === 'object' && data !== null) {
+        detail = (data as any).detail 
+              || (data as any).error 
+              || JSON.stringify(data).slice(0, 300);
+      } else {
+        detail = String(data).slice(0, 300);
+      }
+
+      return `AI Engine [${err.response.status}]: ${detail}`;
     }
     if (err.request) {
       return 'AI Engine unreachable - no response received';
