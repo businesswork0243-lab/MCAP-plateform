@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-from agents import canonical_writer, platform_optimizer, brand_optimizer, humanizer, qa_agent
+from agents import canonical_writer, platform_optimizer, brand_optimizer, humanizer, qa_agent, refiner
 from agents.rule_engine import RuleEngineOrchestrator
 from services.scoring         import score as score_content
 from services.prompt_compiler import PDLRequest, compile as compile_prompt
@@ -485,6 +485,44 @@ async def _safe_qa(
             "passed":       False,
             "error":        f"{type(e).__name__}: {str(e)[:200]}",
         }
+
+
+# ── Refiner Endpoint ──────────────────────────────────────────────────────────
+
+class RefineRequest(BaseModel):
+    content:        str
+    userPrompt:     str = ""
+    quickTags:      list[str] = Field(default_factory=list)
+    platform:       str = "linkedin_post"
+    brandProfile:   Optional[BrandProfile] = None
+    preserveLength: bool = False
+
+
+@app.post("/agents/refiner")
+async def run_refiner(req: RefineRequest):
+    """Apply user-requested improvements to existing content."""
+    try:
+        return await run_with_timeout(
+            refiner.run(
+                original_content=req.content,
+                user_prompt=req.userPrompt,
+                quick_tags=req.quickTags,
+                platform=req.platform,
+                brand_profile=(
+                    req.brandProfile.as_dict() if req.brandProfile and hasattr(req.brandProfile, "as_dict") else (req.brandProfile.dict() if req.brandProfile else None)
+                ),
+                preserve_length=req.preserveLength,
+            ),
+            timeout=120,  # Refinement is faster than full pipeline
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error("refiner failed: %s\n%s", e, traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Refiner: {type(e).__name__}: {str(e)[:200]}"
+        )
 
 
 @app.post("/pipeline/run")

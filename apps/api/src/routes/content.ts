@@ -499,8 +499,12 @@ contentRouter.get('/:id', async (req: AuthenticatedRequest, res: Response): Prom
          a.content_request_id as request_id,
          a.agent_type as content_type,
          a.agent_type,
-         a.content as body,
-         a.content,
+         COALESCE(a.edited_content, a.content) as body,
+         COALESCE(a.edited_content, a.content) as content,
+         a.content as original_content,
+         a.edited_content,
+         a.last_edited_at,
+         a.refinement_count,
          a.version,
          a.status,
          a.quality_score,
@@ -1091,22 +1095,527 @@ contentRouter.post(
   }
 )
 
-// Reject bhi same fix
-contentRouter.post(
-  '/:requestId/artifacts/:artifactId/reject',
+// ═══════════════════════════════════════════════════════════════════════════
+// EDIT / REFINE / REJECT / HISTORY ENDPOINTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+const editSchema = z.object({
+  content: z.string().min(1),
+  changeSummary: z.string().optional(),
+});
+
+const refineSchema = z.object({
+  userPrompt: z.string().optional().default(''),
+  quickTags: z.array(z.string()).optional().default([]),
+  preserveLength: z.boolean().optional().default(false),
+});
+
+const rejectSchema = z.object({
+  reason: z.string().min(3),
+  note: z.string().optional(),
+});
+
+// Helper for building refinement summary
+function buildRefineSummary(userPrompt: string, quickTags: string[]): string {
+  const parts: string[] = [];
+  if (quickTags.length > 0) {
+    parts.push(`Applied: ${quickTags.join(', ')}`);
+  }
+  if (userPrompt) {
+    parts.push(userPrompt.slice(0, 100));
+  }
+  return parts.join(' | ') || 'AI refinement';
+}
+
+// ─── PATCH /api/content/:id/artifacts/:artifactId (Edit) ────────────────────
+
+contentRouter.patch(
+  '/:id/artifacts/:artifactId',
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const { note } = req.body
-      await query(
-        `UPDATE artifacts
-         SET status = 'rejected', rejection_note = $1
-         WHERE id = $2 AND content_request_id = $3`,  // ✅ FIXED
-        [note ?? null, req.params.artifactId, req.params.requestId]
-      )
-      res.json({ message: 'Artifact rejected' })
+      const parsed = editSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Validation failed', details: parsed.error.errors });
+        return;
+      }
+
+      const { content, changeSummary } = parsed.data;
+
+      // Verify ownership
+      const artifact = await queryOne<{
+        id: string;
+        content: string;
+        content_request_id: string;
+        metadata: any;
+      }>(
+        `SELECT a.id, a.content, a.content_request_id, a.metadata
+         FROM artifacts a
+         JOIN content_requests cr ON cr.id = a.content_request_id
+         WHERE a.id = $1 AND cr.organization_id = $2`,
+        [req.params.artifactId, req.user!.organizationId]
+      );
+
+      if (!artifact) {
+        res.status(404).json({ error: 'Artifact not found' });
+        return;
+      }
+
+      // Get platform from metadata
+      let platform = 'canonical';
+      try {
+        const meta = typeof artifact.metadata === 'string' 
+          ? JSON.parse(artifact.metadata) 
+          : artifact.metadata;
+        platform = meta?.platform || platform;
+      } catch {}
+
+      // Get next version number
+      const versionResult = await queryOne<{ next_version: number }>(
+        `SELECT COALESCE(MAX(version_number), 0) + 1 as next_version
+         FROM content_versions
+         WHERE artifact_id = $1`,
+        [artifact.id]
+      );
+      const nextVersion = versionResult?.next_version || 1;
+
+      // Get previous version ID
+      const prevVersion = await queryOne<{ id: string }>(
+        `SELECT id FROM content_versions
+         WHERE artifact_id = $1
+         ORDER BY created_at DESC LIMIT 1`,
+        [artifact.id]
+      );
+
+      // Save version + update artifact
+      const versionId = uuidv4();
+      await withTransaction(async (client) => {
+        // Create version record
+        await client.query(
+          `INSERT INTO content_versions (
+            id, content_request_id, artifact_id, version_number,
+            platform, content, change_type, change_summary,
+            created_by, previous_version_id, char_diff
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'edited', $7, $8, $9, $10)`,
+          [
+            versionId,
+            artifact.content_request_id,
+            artifact.id,
+            nextVersion,
+            platform,
+            content,
+            changeSummary || 'Manual edit',
+            req.user!.id,
+            prevVersion?.id || null,
+            content.length - artifact.content.length,
+          ]
+        );
+
+        // Update artifact
+        await client.query(
+          `UPDATE artifacts SET
+             edited_content = $1,
+             last_edited_by = $2,
+             last_edited_at = NOW(),
+             current_version_id = $3
+           WHERE id = $4`,
+          [content, req.user!.id, versionId, artifact.id]
+        );
+      });
+
+      logger.info('Artifact edited', {
+        artifactId: artifact.id,
+        version: nextVersion,
+        userId: req.user!.id,
+      });
+
+      res.json({
+        artifactId: artifact.id,
+        versionId,
+        versionNumber: nextVersion,
+        content,
+        message: 'Content updated',
+      });
     } catch (err) {
-      logger.error('POST reject error:', { error: err })
-      res.status(500).json({ error: 'Failed to reject' })
+      logger.error('PATCH artifact error:', { error: err });
+      res.status(500).json({ error: 'Failed to update content' });
     }
   }
-)
+);
+
+// ─── POST /api/content/:id/artifacts/:artifactId/refine (AI Refinement) ─────
+
+contentRouter.post(
+  '/:id/artifacts/:artifactId/refine',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const parsed = refineSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'Validation failed', details: parsed.error.errors });
+        return;
+      }
+
+      const { userPrompt, quickTags, preserveLength } = parsed.data;
+
+      if (!userPrompt && quickTags.length === 0) {
+        res.status(400).json({ 
+          error: 'Provide either userPrompt or quickTags for refinement' 
+        });
+        return;
+      }
+
+      // Fetch artifact with current content
+      const artifact = await queryOne<{
+        id: string;
+        content: string;
+        edited_content: string | null;
+        content_request_id: string;
+        metadata: any;
+        refinement_count: number;
+      }>(
+        `SELECT 
+           a.id, 
+           a.content,
+           a.edited_content,
+           a.content_request_id, 
+           a.metadata,
+           COALESCE(a.refinement_count, 0) as refinement_count
+         FROM artifacts a
+         JOIN content_requests cr ON cr.id = a.content_request_id
+         WHERE a.id = $1 AND cr.organization_id = $2`,
+        [req.params.artifactId, req.user!.organizationId]
+      );
+
+      if (!artifact) {
+        res.status(404).json({ error: 'Artifact not found' });
+        return;
+      }
+
+      // Use edited content if available, else original
+      const sourceContent = artifact.edited_content || artifact.content;
+
+      // Get platform from metadata
+      let platform = 'linkedin_post';
+      try {
+        const meta = typeof artifact.metadata === 'string' 
+          ? JSON.parse(artifact.metadata) 
+          : artifact.metadata;
+        platform = meta?.platform || platform;
+      } catch {}
+
+      // Fetch brand profile if request has one
+      const request = await queryOne<{ brand_profile_id: string | null }>(
+        `SELECT brand_profile_id FROM content_requests WHERE id = $1`,
+        [artifact.content_request_id]
+      );
+
+      let brandProfile: Record<string, unknown> | null = null;
+      if (request?.brand_profile_id) {
+        brandProfile = await queryOne(
+          `SELECT * FROM brand_profiles WHERE id = $1`,
+          [request.brand_profile_id]
+        );
+      }
+
+      // Call AI Engine Refiner
+      const aiUrl = process.env.AI_ENGINE_URL || 'http://localhost:8000';
+      logger.info('Calling refiner', { 
+        artifactId: artifact.id, 
+        platform, 
+        hasPrompt: !!userPrompt, 
+        tagCount: quickTags.length 
+      });
+
+      const aiResponse = await axios.post(
+        `${aiUrl}/agents/refiner`,
+        {
+          content: sourceContent,
+          userPrompt,
+          quickTags,
+          platform,
+          brandProfile,
+          preserveLength,
+        },
+        { timeout: 120_000 }
+      );
+
+      const refinedContent = aiResponse.data?.content || sourceContent;
+      const tokensUsed = aiResponse.data?.tokensUsed || 0;
+
+      // Save version + update artifact
+      const versionId = uuidv4();
+      const nextVersion = artifact.refinement_count + 2; // +1 for current, +1 for new
+
+      const prevVersion = await queryOne<{ id: string }>(
+        `SELECT id FROM content_versions
+         WHERE artifact_id = $1
+         ORDER BY created_at DESC LIMIT 1`,
+        [artifact.id]
+      );
+
+      await withTransaction(async (client) => {
+        // Create version
+        await client.query(
+          `INSERT INTO content_versions (
+            id, content_request_id, artifact_id, version_number,
+            platform, content, change_type, change_summary,
+            user_prompt, quick_tags, tokens_used,
+            created_by, previous_version_id, char_diff
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'refined', $7, $8, $9, $10, $11, $12, $13)`,
+          [
+            versionId,
+            artifact.content_request_id,
+            artifact.id,
+            nextVersion,
+            platform,
+            refinedContent,
+            buildRefineSummary(userPrompt, quickTags),
+            userPrompt || '',
+            JSON.stringify(quickTags),
+            tokensUsed,
+            req.user!.id,
+            prevVersion?.id || null,
+            refinedContent.length - sourceContent.length,
+          ]
+        );
+
+        // Update artifact
+        await client.query(
+          `UPDATE artifacts SET
+             edited_content = $1,
+             last_edited_by = $2,
+             last_edited_at = NOW(),
+             refinement_count = refinement_count + 1,
+             current_version_id = $3
+           WHERE id = $4`,
+          [refinedContent, req.user!.id, versionId, artifact.id]
+        );
+
+        // Update total refinements on request
+        await client.query(
+          `UPDATE content_requests 
+           SET total_refinements = COALESCE(total_refinements, 0) + 1
+           WHERE id = $1`,
+          [artifact.content_request_id]
+        );
+      });
+
+      logger.info('Content refined', {
+        artifactId: artifact.id,
+        version: nextVersion,
+        tokens: tokensUsed,
+      });
+
+      res.json({
+        artifactId: artifact.id,
+        versionId,
+        versionNumber: nextVersion,
+        content: refinedContent,
+        tokensUsed,
+        message: 'Content refined successfully',
+      });
+    } catch (err) {
+      logger.error('POST refine error:', { error: err });
+      
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail || err.message;
+        res.status(500).json({ 
+          error: 'AI refinement failed', 
+          detail: String(detail).slice(0, 300) 
+        });
+        return;
+      }
+      
+      res.status(500).json({ error: 'Failed to refine content' });
+    }
+  }
+);
+
+// ─── POST /api/content/:id/artifacts/:artifactId/reject (FIXED) ─────────────
+
+contentRouter.post(
+  '/:id/artifacts/:artifactId/reject',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      const parsed = rejectSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ 
+          error: 'Rejection reason required (min 3 chars)', 
+          details: parsed.error.errors 
+        });
+        return;
+      }
+
+      const { reason, note } = parsed.data;
+
+      // Verify ownership
+      const artifact = await queryOne<{ id: string; content_request_id: string }>(
+        `SELECT a.id, a.content_request_id
+         FROM artifacts a
+         JOIN content_requests cr ON cr.id = a.content_request_id
+         WHERE a.id = $1 AND cr.organization_id = $2`,
+        [req.params.artifactId, req.user!.organizationId]
+      );
+
+      if (!artifact) {
+        res.status(404).json({ error: 'Artifact not found' });
+        return;
+      }
+
+      await withTransaction(async (client) => {
+        // Update artifact
+        await client.query(
+          `UPDATE artifacts
+           SET status = 'rejected', 
+               rejection_note = $1
+           WHERE id = $2`,
+          [note || reason, artifact.id]
+        );
+
+        // Check if all artifacts rejected → mark request as rejected
+        const activeArtifacts = await client.query(
+          `SELECT COUNT(*) as count FROM artifacts
+           WHERE content_request_id = $1 
+             AND status NOT IN ('rejected')`,
+          [artifact.content_request_id]
+        );
+
+        if (parseInt(activeArtifacts.rows[0].count) === 0) {
+          await client.query(
+            `UPDATE content_requests
+             SET status = 'rejected',
+                 rejection_reason = $1,
+                 rejected_by = $2,
+                 rejected_at = NOW()
+             WHERE id = $3`,
+            [reason, req.user!.id, artifact.content_request_id]
+          );
+        }
+      });
+
+      logger.info('Artifact rejected', {
+        artifactId: artifact.id,
+        reason: reason.slice(0, 50),
+        userId: req.user!.id,
+      });
+
+      res.json({ 
+        message: 'Content rejected',
+        artifactId: artifact.id,
+      });
+    } catch (err) {
+      logger.error('POST reject error:', { error: err });
+      res.status(500).json({ error: 'Failed to reject content' });
+    }
+  }
+);
+
+// ─── GET /api/content/:id/artifacts/:artifactId/versions (History) ──────────
+
+contentRouter.get(
+  '/:id/artifacts/:artifactId/versions',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      // Verify ownership
+      const artifact = await queryOne(
+        `SELECT a.id FROM artifacts a
+         JOIN content_requests cr ON cr.id = a.content_request_id
+         WHERE a.id = $1 AND cr.organization_id = $2`,
+        [req.params.artifactId, req.user!.organizationId]
+      );
+
+      if (!artifact) {
+        res.status(404).json({ error: 'Artifact not found' });
+        return;
+      }
+
+      const versions = await query(
+        `SELECT 
+           cv.id,
+           cv.version_number,
+           cv.platform,
+           cv.content,
+           cv.change_type,
+           cv.change_summary,
+           cv.user_prompt,
+           cv.quick_tags,
+           cv.tokens_used,
+           cv.char_diff,
+           cv.created_at,
+           u.name as created_by_name,
+           u.email as created_by_email
+         FROM content_versions cv
+         LEFT JOIN users u ON u.id = cv.created_by
+         WHERE cv.artifact_id = $1
+         ORDER BY cv.version_number DESC`,
+        [req.params.artifactId]
+      );
+
+      res.json({ 
+        artifactId: req.params.artifactId,
+        totalVersions: versions.length,
+        versions 
+      });
+    } catch (err) {
+      logger.error('GET versions error:', { error: err });
+      res.status(500).json({ error: 'Failed to fetch versions' });
+    }
+  }
+);
+
+// ─── POST /api/content/:id/artifacts/:artifactId/restore/:versionId ─────────
+
+contentRouter.post(
+  '/:id/artifacts/:artifactId/restore/:versionId',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      // Verify ownership + fetch version
+      const version = await queryOne<{
+        id: string;
+        content: string;
+        version_number: number;
+        artifact_id: string;
+      }>(
+        `SELECT cv.id, cv.content, cv.version_number, cv.artifact_id
+         FROM content_versions cv
+         JOIN artifacts a ON a.id = cv.artifact_id
+         JOIN content_requests cr ON cr.id = a.content_request_id
+         WHERE cv.id = $1 
+           AND a.id = $2 
+           AND cr.organization_id = $3`,
+        [req.params.versionId, req.params.artifactId, req.user!.organizationId]
+      );
+
+      if (!version) {
+        res.status(404).json({ error: 'Version not found' });
+        return;
+      }
+
+      // Update artifact to use this version's content
+      await query(
+        `UPDATE artifacts SET
+           edited_content = $1,
+           current_version_id = $2,
+           last_edited_by = $3,
+           last_edited_at = NOW()
+         WHERE id = $4`,
+        [version.content, version.id, req.user!.id, req.params.artifactId]
+      );
+
+      logger.info('Version restored', {
+        artifactId: req.params.artifactId,
+        versionId: version.id,
+        version: version.version_number,
+      });
+
+      res.json({
+        artifactId: req.params.artifactId,
+        restoredToVersion: version.version_number,
+        content: version.content,
+        message: `Restored to version ${version.version_number}`,
+      });
+    } catch (err) {
+      logger.error('POST restore error:', { error: err });
+      res.status(500).json({ error: 'Failed to restore version' });
+    }
+  }
+);
