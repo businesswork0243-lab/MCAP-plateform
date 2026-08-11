@@ -51,32 +51,37 @@ const getAllowedOrigins = (): string[] => {
     'http://localhost:3000',
     'http://localhost:3001',
   ];
-  
+
   if (process.env.WEB_URL) {
-    // Render service host - add both http and https
     const webUrl = process.env.WEB_URL.startsWith('http')
       ? process.env.WEB_URL
       : `https://${process.env.WEB_URL}`;
     origins.push(webUrl);
   }
-  
+
   return origins;
 };
 
 app.use(cors({
   origin: (origin, callback) => {
-    // No origin = mobile/curl/Postman - allow
     if (!origin) return callback(null, true);
-    
-    // Render internal network
-    if (origin.endsWith('.onrender.com')) return callback(null, true);
-    
-    // Localhost development
-    if (origin.includes('localhost')) return callback(null, true);
-    
+
+    // ✅ Vercel (production + all preview deployments)
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+
+    // ✅ Railway
+    if (origin.endsWith('.up.railway.app')) return callback(null, true);
+    if (origin.endsWith('.railway.app'))    return callback(null, true);
+
+    // Legacy Render
+    if (origin.endsWith('.onrender.com'))   return callback(null, true);
+
+    // Localhost
+    if (origin.includes('localhost'))       return callback(null, true);
+
     // Explicit whitelist
     if (getAllowedOrigins().includes(origin)) return callback(null, true);
-    
+
     logger.warn(`CORS blocked: ${origin}`);
     callback(new Error(`CORS: origin ${origin} not allowed`));
   },

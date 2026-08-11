@@ -56,18 +56,24 @@ export const JWT_REFRESH_SECRET = (() => {
 // ─── Token Generators ─────────────────────────────────────────────────────────
 
 export function generateAccessToken(userId: string): string {
+  // ✅ Use env variable, fallback to 1h
+  const expiresIn = (process.env.JWT_EXPIRES_IN || '1h') as jwt.SignOptions['expiresIn'];
+
   return jwt.sign(
     { userId, type: 'access' } satisfies Omit<JWTPayload, 'iat' | 'exp'>,
     JWT_SECRET,
-    { expiresIn: '15m' } // Short lived
+    { expiresIn }
   )
 }
 
 export function generateRefreshToken(userId: string): string {
+  // Refresh token longer than access token
+  const expiresIn = (process.env.JWT_REFRESH_EXPIRES_IN || '30d') as jwt.SignOptions['expiresIn'];
+
   return jwt.sign(
     { userId, type: 'refresh' } satisfies Omit<JWTPayload, 'iat' | 'exp'>,
     JWT_REFRESH_SECRET,
-    { expiresIn: '30d' }
+    { expiresIn }
   )
 }
 
