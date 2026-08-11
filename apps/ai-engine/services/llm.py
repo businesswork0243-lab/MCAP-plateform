@@ -11,6 +11,7 @@ from tenacity import (
 )
 
 import anthropic
+from anthropic.types import TextBlock
 import openai
 
 log = logging.getLogger("ai-engine.llm")
@@ -142,7 +143,8 @@ async def complete_claude(
         timeout=LLM_TIMEOUT,
     )
 
-    text   = resp.content[0].text if resp.content else ""
+    text_blocks = [b for b in resp.content if isinstance(b, TextBlock)]
+    text   = text_blocks[0].text if text_blocks else ""
     tokens = (
         resp.usage.input_tokens + resp.usage.output_tokens
         if resp.usage else 0
