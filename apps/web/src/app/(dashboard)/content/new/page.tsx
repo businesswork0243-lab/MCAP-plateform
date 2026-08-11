@@ -1026,41 +1026,74 @@ e.g. "If this resonated, DM me the word GROWTH and I'll send you the full framew
               animate={{ opacity: 1 }}
               className="space-y-4"
             >
+              {/* ✅ FIX: Primary Keyword input NOW WIRED + length validation */}
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-2">
                   Primary SEO Keyword
+                  <span className="ml-2 text-xs text-gray-600">(max 200 chars)</span>
                 </label>
                 <input
+                  value={form.seoKeywords[0] || ''}
+                  onChange={e => {
+                    const val = e.target.value.slice(0, 200); // Hard limit
+                    const rest = form.seoKeywords.slice(1);
+                    update('seoKeywords', val ? [val, ...rest] : rest);
+                  }}
                   placeholder="e.g. content marketing for startups"
+                  maxLength={200}
                   className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:border-violet-500/50 outline-none transition-colors"
                 />
+                <p className="text-xs text-gray-600 mt-1 text-right">
+                  {(form.seoKeywords[0] || '').length}/200
+                </p>
               </div>
+
+              {/* ✅ FIX: Secondary keywords - each tag limited */}
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-2">
                   Secondary Keywords
-                  <span className="ml-2 text-xs text-gray-600">(press Enter)</span>
+                  <span className="ml-2 text-xs text-gray-600">(press Enter, max 100 chars each)</span>
                 </label>
                 <div className="min-h-[44px] p-2 bg-white/5 border border-white/10 rounded-xl flex flex-wrap gap-2 focus-within:border-violet-500/50">
-                  {form.seoKeywords.map((kw, i) => (
-                    <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-lg border border-green-500/30">
-                      {kw}
-                      <button onClick={() => update('seoKeywords', form.seoKeywords.filter((_, idx) => idx !== i))}>×</button>
+                  {form.seoKeywords.slice(1).map((kw, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-green-500/20 text-green-300 text-xs rounded-lg border border-green-500/30 max-w-full"
+                    >
+                      <span className="truncate max-w-[200px]">{kw}</span>
+                      <button
+                        onClick={() => {
+                          const primary = form.seoKeywords[0] || '';
+                          const secondary = form.seoKeywords.slice(1);
+                          const newSecondary = secondary.filter((_, idx) => idx !== i);
+                          update('seoKeywords', primary ? [primary, ...newSecondary] : newSecondary);
+                        }}
+                      >×</button>
                     </span>
                   ))}
                   <input
                     onKeyDown={e => {
                       if (e.key === 'Enter') {
-                        const val = (e.target as HTMLInputElement).value.trim();
-                        if (val) update('seoKeywords', [...form.seoKeywords, val]);
+                        const raw = (e.target as HTMLInputElement).value.trim();
+                        if (!raw) return;
+                        const val = raw.slice(0, 100); // Per-tag limit
+                        if (val && !form.seoKeywords.includes(val)) {
+                          update('seoKeywords', [...form.seoKeywords, val]);
+                        }
                         (e.target as HTMLInputElement).value = '';
                         e.preventDefault();
                       }
                     }}
+                    maxLength={100}
                     className="flex-1 min-w-[120px] bg-transparent text-sm text-white outline-none placeholder:text-gray-600"
                     placeholder="Add keywords..."
                   />
                 </div>
+                <p className="text-xs text-gray-600 mt-1">
+                  Tip: Add individual keywords one at a time. Long comma-separated lists don't work well.
+                </p>
               </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-400 mb-2">
                   Target Meta Description
@@ -1194,7 +1227,7 @@ export default function NewContentPage() {
     setError('');
 
     try {
-      // Validate before sending
+      // Client-side validation
       if (!form.topic.trim()) {
         setError('Topic is required');
         setGenerating(false);
@@ -1207,66 +1240,67 @@ export default function NewContentPage() {
         return;
       }
 
+      // ✅ NEW: Length validation before send
+      const primaryKw = form.seoKeywords[0] || '';
+      if (primaryKw.length > 200) {
+        setError('Primary SEO keyword is too long (max 200 chars). Split into secondary keywords.');
+        setGenerating(false);
+        return;
+      }
+
+      if (form.customAudience.length > 500) {
+        setError('Custom audience field is too long. Please shorten it.');
+        setGenerating(false);
+        return;
+      }
+
       const isSystemStructure = [
-        'thesis', 'story', 'listicle', 'problem_solution', 
+        'thesis', 'story', 'listicle', 'problem_solution',
         'before_after', 'aida', 'opinion', 'case_study'
       ].includes(form.writingStructureId);
 
-      // Build payload matching backend schema exactly
       const payload: Record<string, unknown> = {
-        topic:     form.topic.trim(),
-        objective: form.objective || 'Build thought leadership',
+        topic:     form.topic.trim().slice(0, 500),  // Hard cap
+        objective: (form.objective || 'Build thought leadership').slice(0, 200),
         context:   form.context || '',
 
-        // Audience
-        audience:            form.customAudience || 'General Business',
+        audience:            (form.customAudience || 'General Business').slice(0, 500),
         audienceDescription: form.icpDescription || '',
         icpProfileId:        form.selectedIcpId ?? undefined,
 
-        // Platforms — MUST be array of strings
         platforms: form.targetPlatforms,
 
-        // Structure
         writingStructure:    isSystemStructure ? form.writingStructureId : 'custom',
         customStructureId:   !isSystemStructure ? form.writingStructureId : undefined,
         customStructureFlow: form.customStructureFlow || undefined,
 
-        // Style
-        narrativePerspective: form.perspective  || 'Founder',
-        language:             form.language     || 'English',
+        narrativePerspective: (form.perspective || 'Founder').slice(0, 100),
+        language:             (form.language     || 'English').slice(0, 30),
         keywords:             form.keywords     || [],
 
-        // CTA
-        ctaType:   form.ctaType   || 'comment',
+        ctaType:   (form.ctaType || 'comment').slice(0, 100),
         customCta: form.customCta || undefined,
 
-        // Brand
         brandProfileId: form.brandProfileId ?? undefined,
 
-        // AI Settings
-        humanizationEnabled:  form.enableHumanization,
-        humanizationLevel:    form.humanizationIntensity || 'medium',
-        qaEnabled:            form.enableQA,
+        humanizationEnabled: form.enableHumanization,
+        humanizationLevel:   form.humanizationIntensity || 'medium',
+        qaEnabled:           form.enableQA,
 
-        // Tonality
         tonalitySpectrum: form.tonality || {},
 
-        // Blog word count
         wordCount: form.wordCount ?? undefined,
 
-        // SEO
-        seoEnabled:  form.enableSEO || false,
+        seoEnabled: form.enableSEO || false,
         seoSettings: form.enableSEO ? {
-          primaryKeyword:    form.seoKeywords[0] || undefined,
-          secondaryKeywords: form.seoKeywords.slice(1),
-          metaDescription:   form.seoMetaDescription || undefined,
+          primaryKeyword:    primaryKw.slice(0, 200) || undefined,
+          secondaryKeywords: form.seoKeywords.slice(1).map(k => k.slice(0, 100)),
+          metaDescription:   form.seoMetaDescription.slice(0, 160) || undefined,
         } : {},
 
-        // Special instructions
         specialInstructions: form.specialInstructions || '',
       };
 
-      // Remove undefined values (backend validation mein issue)
       const cleanPayload = Object.fromEntries(
         Object.entries(payload).filter(([, v]) => v !== undefined)
       );
@@ -1276,8 +1310,26 @@ export default function NewContentPage() {
 
       router.push(`/content/${contentId || requestId}/generating`);
 
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Generation failed');
+    } catch (err: any) {
+      // ✅ NEW: Better error messages from backend
+      const backendErr = err?.response?.data;
+      let msg = 'Generation failed';
+
+      if (backendErr?.error) {
+        msg = typeof backendErr.error === 'string'
+          ? backendErr.error
+          : 'Validation failed';
+      }
+
+      if (backendErr?.details && Array.isArray(backendErr.details)) {
+        msg = backendErr.details.map((d: any) => `${d.field}: ${d.message}`).join(', ');
+      }
+
+      if (backendErr?.hint) {
+        msg += ` — ${backendErr.hint}`;
+      }
+
+      setError(msg);
       setGenerating(false);
     }
   };

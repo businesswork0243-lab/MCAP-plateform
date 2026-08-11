@@ -353,21 +353,21 @@ contentRouter.post('/generate', async (req: AuthenticatedRequest, res: Response)
         req.user!.id,
         data.clientId ?? null,
 
-        data.topic,
-        data.objective ?? null,
+        data.topic.slice(0, 500),
+        (data.objective ?? '').slice(0, 500) || null,
         data.context ?? null,
-        (aiPayload.audience as string),
+        (aiPayload.audience as string).slice(0, 500),  // ✅ Guard
         data.audienceDescription ?? null,
 
         JSON.stringify(data.platforms),
-        data.platforms[0],
+        data.platforms[0].slice(0, 200),  // ✅ Guard
 
-        data.writingStructure ?? null,
+        (data.writingStructure ?? '').slice(0, 500) || null,  // ✅ Guard
         data.customStructureId ?? null,
         data.customStructureFlow ?? null,
 
-        data.narrativePerspective ?? null,
-        data.ctaType ?? null,
+        (data.narrativePerspective ?? '').slice(0, 500) || null,  // ✅ Guard
+        (data.ctaType ?? '').slice(0, 500) || null,  // ✅ Guard
         data.customCta ?? null,
 
         data.brandProfileId ?? null,
@@ -377,13 +377,13 @@ contentRouter.post('/generate', async (req: AuthenticatedRequest, res: Response)
         JSON.stringify(data.tonalitySpectrum),
 
         data.humanizationEnabled,
-        data.humanizationLevel,
+        (data.humanizationLevel ?? 'medium').slice(0, 50),  // ✅ Guard
 
         data.qaEnabled,
         data.requiresApproval,
 
-        data.readingLevel ?? null,
-        data.language,
+        (data.readingLevel ?? '').slice(0, 100) || null,  // ✅ Guard
+        (data.language ?? 'English').slice(0, 50),  // ✅ Guard
         data.specialInstructions ?? null,
 
         JSON.stringify(data.referenceUrls),
