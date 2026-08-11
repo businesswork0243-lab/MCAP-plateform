@@ -297,6 +297,10 @@ export default function ContentWorkspacePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['content', id] });
+      queryClient.invalidateQueries({ 
+        queryKey: ['content-list'],
+        exact: false,
+      });
       setMode('view');
     },
   });
@@ -313,6 +317,10 @@ export default function ContentWorkspacePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['content', id] });
+      queryClient.invalidateQueries({ 
+        queryKey: ['content-list'],
+        exact: false,
+      });
       setRefinePrompt('');
       setSelectedTags([]);
       setMode('view');
@@ -325,7 +333,13 @@ export default function ContentWorkspacePage() {
       if (!activeArtifact?.id) throw new Error('No artifact');
       return api.post(`/content/${id}/artifacts/${activeArtifact.id}/approve`);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['content', id] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content', id] });
+      queryClient.invalidateQueries({ 
+        queryKey: ['content-list'],
+        exact: false,
+      });
+    },
   });
 
   // Reject mutation
@@ -339,6 +353,10 @@ export default function ContentWorkspacePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['content', id] });
+      queryClient.invalidateQueries({ 
+        queryKey: ['content-list'],
+        exact: false,
+      });
       setShowRejectModal(false);
       setRejectReason('');
     },

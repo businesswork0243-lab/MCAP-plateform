@@ -1076,24 +1076,7 @@ contentRouter.get('/:id/repurposes', async (req: AuthenticatedRequest, res: Resp
   }
 })
 
-// POST /api/content/:requestId/artifacts/:artifactId/approve
-contentRouter.post(
-  '/:requestId/artifacts/:artifactId/approve',
-  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-    try {
-      await query(
-        `UPDATE artifacts
-         SET status = 'approved', approved_by = $1, approved_at = NOW()
-         WHERE id = $2 AND content_request_id = $3`,  // ✅ FIXED
-        [req.user!.id, req.params.artifactId, req.params.requestId]
-      )
-      res.json({ message: 'Artifact approved' })
-    } catch (err) {
-      logger.error('POST approve error:', { error: err })
-      res.status(500).json({ error: 'Failed to approve' })
-    }
-  }
-)
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 // EDIT / REFINE / REJECT / HISTORY ENDPOINTS
@@ -1430,10 +1413,80 @@ contentRouter.post(
   }
 );
 
-// ─── POST /api/content/:id/artifacts/:artifactId/reject (FIXED) ─────────────
+// ═══════════════════════════════════════════════════════════════════════════
+// APPROVE - Updates BOTH artifact AND content_request status
+// ═══════════════════════════════════════════════════════════════════════════
 
 contentRouter.post(
-  '/:id/artifacts/:artifactId/reject',
+  '/:requestId/artifacts/:artifactId/approve',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      // Verify ownership
+      const artifact = await queryOne<{ 
+        id: string; 
+        content_request_id: string 
+      }>(
+        `SELECT a.id, a.content_request_id
+         FROM artifacts a
+         JOIN content_requests cr ON cr.id = a.content_request_id
+         WHERE a.id = $1 
+           AND cr.id = $2 
+           AND cr.organization_id = $3`,
+        [req.params.artifactId, req.params.requestId, req.user!.organizationId]
+      );
+
+      if (!artifact) {
+        res.status(404).json({ error: 'Artifact not found' });
+        return;
+      }
+
+      await withTransaction(async (client) => {
+        // 1. Approve the artifact
+        await client.query(
+          `UPDATE artifacts
+           SET status = 'approved', 
+               approved_by = $1, 
+               approved_at = NOW()
+           WHERE id = $2`,
+          [req.user!.id, artifact.id]
+        );
+
+        // 2. ✅ CRITICAL: Update parent request status
+        await client.query(
+          `UPDATE content_requests
+           SET status = 'approved',
+               updated_at = NOW(),
+               completed_at = COALESCE(completed_at, NOW())
+           WHERE id = $1`,
+          [artifact.content_request_id]
+        );
+      });
+
+      logger.info('Content approved', {
+        artifactId: artifact.id,
+        requestId: artifact.content_request_id,
+        userId: req.user!.id,
+      });
+
+      res.json({ 
+        message: 'Content approved',
+        artifactId: artifact.id,
+        requestId: artifact.content_request_id,
+        requestStatus: 'approved',
+      });
+    } catch (err) {
+      logger.error('POST approve error:', { error: err });
+      res.status(500).json({ error: 'Failed to approve' });
+    }
+  }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REJECT - Updates BOTH artifact AND content_request status
+// ═══════════════════════════════════════════════════════════════════════════
+
+contentRouter.post(
+  '/:requestId/artifacts/:artifactId/reject',
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const parsed = rejectSchema.safeParse(req.body);
@@ -1448,12 +1501,17 @@ contentRouter.post(
       const { reason, note } = parsed.data;
 
       // Verify ownership
-      const artifact = await queryOne<{ id: string; content_request_id: string }>(
+      const artifact = await queryOne<{ 
+        id: string; 
+        content_request_id: string 
+      }>(
         `SELECT a.id, a.content_request_id
          FROM artifacts a
          JOIN content_requests cr ON cr.id = a.content_request_id
-         WHERE a.id = $1 AND cr.organization_id = $2`,
-        [req.params.artifactId, req.user!.organizationId]
+         WHERE a.id = $1 
+           AND cr.id = $2 
+           AND cr.organization_id = $3`,
+        [req.params.artifactId, req.params.requestId, req.user!.organizationId]
       );
 
       if (!artifact) {
@@ -1462,7 +1520,7 @@ contentRouter.post(
       }
 
       await withTransaction(async (client) => {
-        // Update artifact
+        // 1. Reject the artifact
         await client.query(
           `UPDATE artifacts
            SET status = 'rejected', 
@@ -1471,29 +1529,22 @@ contentRouter.post(
           [note || reason, artifact.id]
         );
 
-        // Check if all artifacts rejected → mark request as rejected
-        const activeArtifacts = await client.query(
-          `SELECT COUNT(*) as count FROM artifacts
-           WHERE content_request_id = $1 
-             AND status NOT IN ('rejected')`,
-          [artifact.content_request_id]
+        // 2. ✅ CRITICAL: Update parent request status
+        await client.query(
+          `UPDATE content_requests
+           SET status = 'rejected',
+               rejection_reason = $1,
+               rejected_by = $2,
+               rejected_at = NOW(),
+               updated_at = NOW()
+           WHERE id = $3`,
+          [reason, req.user!.id, artifact.content_request_id]
         );
-
-        if (parseInt(activeArtifacts.rows[0].count) === 0) {
-          await client.query(
-            `UPDATE content_requests
-             SET status = 'rejected',
-                 rejection_reason = $1,
-                 rejected_by = $2,
-                 rejected_at = NOW()
-             WHERE id = $3`,
-            [reason, req.user!.id, artifact.content_request_id]
-          );
-        }
       });
 
-      logger.info('Artifact rejected', {
+      logger.info('Content rejected', {
         artifactId: artifact.id,
+        requestId: artifact.content_request_id,
         reason: reason.slice(0, 50),
         userId: req.user!.id,
       });
@@ -1501,13 +1552,16 @@ contentRouter.post(
       res.json({ 
         message: 'Content rejected',
         artifactId: artifact.id,
+        requestId: artifact.content_request_id,
+        requestStatus: 'rejected',
       });
     } catch (err) {
       logger.error('POST reject error:', { error: err });
-      res.status(500).json({ error: 'Failed to reject content' });
+      res.status(500).json({ error: 'Failed to reject' });
     }
   }
 );
+
 
 // ─── GET /api/content/:id/artifacts/:artifactId/versions (History) ──────────
 

@@ -31,7 +31,7 @@ interface Pagination {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  approved:          { label: 'Ready',      color: 'text-green-400 bg-green-500/15 border-green-500/30'    },
+  approved:          { label: 'Approved',   color: 'text-green-400 bg-green-500/15 border-green-500/30'    },
   published:         { label: 'Published',  color: 'text-blue-400 bg-blue-500/15 border-blue-500/30'       },
   awaiting_review:   { label: 'Review',     color: 'text-amber-400 bg-amber-500/15 border-amber-500/30'    },
   running:           { label: 'Generating', color: 'text-violet-400 bg-violet-500/15 border-violet-500/30' },
@@ -39,6 +39,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   queued:            { label: 'Queued',     color: 'text-gray-400 bg-gray-500/15 border-gray-500/30'       },
   generation_failed: { label: 'Failed',     color: 'text-red-400 bg-red-500/15 border-red-500/30'          },
   failed:            { label: 'Failed',     color: 'text-red-400 bg-red-500/15 border-red-500/30'          },
+  rejected:          { label: 'Rejected',   color: 'text-red-400 bg-red-500/15 border-red-500/30'          },
   completed:         { label: 'Complete',   color: 'text-green-400 bg-green-500/15 border-green-500/30'    },
   draft:             { label: 'Draft',      color: 'text-gray-500 bg-gray-500/10 border-gray-500/20'       },
   unknown:           { label: 'Unknown',    color: 'text-gray-500 bg-gray-500/10 border-gray-500/20'       },
@@ -46,9 +47,10 @@ const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
 
 const STATUS_FILTERS = [
   { value: '',                  label: 'All'        },
-  { value: 'approved',          label: 'Ready'      },
+  { value: 'approved',          label: 'Approved'   },
   { value: 'awaiting_review',   label: 'Review'     },
   { value: 'running',           label: 'Generating' },
+  { value: 'rejected',          label: 'Rejected'   },
   { value: 'generation_failed', label: 'Failed'     },
 ];
 
@@ -191,7 +193,8 @@ export default function ContentLibraryPage() {
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ['content-list', queryStr],
     queryFn: () => api.get(`/content?${queryStr}`).then(r => r.data),
-    staleTime: 30_000,
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
   });
 
   // ✅ SAFE: Filter out invalid items
