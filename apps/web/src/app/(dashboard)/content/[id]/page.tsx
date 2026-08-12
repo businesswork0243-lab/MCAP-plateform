@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api from '@/lib/api';
+import api, { aiApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -309,7 +309,7 @@ export default function ContentWorkspacePage() {
   const refineMutation = useMutation({
     mutationFn: () => {
       if (!activeArtifact?.id) throw new Error('No artifact');
-      return api.post(`/content/${id}/artifacts/${activeArtifact.id}/refine`, {
+      return aiApi.post(`/content/${id}/artifacts/${activeArtifact.id}/refine`, {
         userPrompt: refinePrompt,
         quickTags: selectedTags,
         preserveLength: false,
@@ -324,6 +324,11 @@ export default function ContentWorkspacePage() {
       setRefinePrompt('');
       setSelectedTags([]);
       setMode('view');
+    },
+    onError: (error: any) => {
+      console.error('Refine failed:', error);
+      const detail = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Unknown error';
+      alert(`AI Refinement failed: ${detail}`);
     },
   });
 
