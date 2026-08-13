@@ -64,6 +64,10 @@ CREATE INDEX IF NOT EXISTS idx_content_versions_request
 CREATE INDEX IF NOT EXISTS idx_content_versions_number
   ON content_versions(artifact_id, version_number DESC);
 
+-- Ensure created_by is optional
+ALTER TABLE content_versions
+  ALTER COLUMN created_by DROP NOT NULL;
+
 -- ── 3. Content Requests missing columns ──────────────────────────────────────
 
 ALTER TABLE content_requests

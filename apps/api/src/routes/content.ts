@@ -1042,8 +1042,9 @@ contentRouter.post(
             version_number, platform, content,
             change_type, change_summary,
             tokens_used, char_diff,
-            previous_version_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, 'humanized', $7, $8, $9, $10)`,
+            previous_version_id,
+            created_by
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'humanized', $7, $8, $9, $10, $11)`,
           [
             uuidv4(),
             req.params.id,
@@ -1055,6 +1056,7 @@ contentRouter.post(
             tokensUsed,
             newContent.length - sourceContent.length,
             prevVersion?.id || null,
+            req.user?.id || null,
           ]
         );
       } catch (versionErr) {
