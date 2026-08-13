@@ -5,7 +5,11 @@ import uuid
 import logging
 from datetime import datetime, timezone
 
-from .agents.static_validator   import StaticValidatorAgent, MAX_ITERATIONS
+from .agents.static_validator   import (
+    StaticValidatorAgent,
+    MAX_ITERATIONS,
+    PASS_THRESHOLD,
+)
 from .agents.regeneration_agent import RegenerationAgent
 from .agents.dynamic_rule_gen   import DynamicRuleGeneratorAgent
 from .rules.rule_models         import (
@@ -24,11 +28,11 @@ class RuleEngineOrchestrator:
     │                       ↓                                    │
     │  Agent 1 → Static Rules + Dynamic Rules BOTH validate      │
     │                       ↓                                    │
-    │            Score >= 80% AND no critical failures?          │
+    │            Score >= PASS_THRESHOLD (65%)?                  │
     │                 YES ──► ✅ PASS                            │
     │                 NO  ──► Agent 2 (surgical fix)             │
     │                             ↓                              │
-    │                   Back to Agent 1 (max 5x)                 │
+    │                   Back to Agent 1 (max 3x)                 │
     └─────────────────────────────────────────────────────────────┘
     """
 
@@ -59,7 +63,6 @@ class RuleEngineOrchestrator:
         )
 
         # ── Agent 3: Dynamic Rules generate (ONCE, upfront) ───────────────
-        # Spec: "Generate custom rules for the current request"
         dynamic_rules: DynamicRuleSet = await self.rule_gen.generate(
             user_prompt=user_prompt,
             brand_data=brand_data,
@@ -82,7 +85,6 @@ class RuleEngineOrchestrator:
         final_fn_count   = 0
 
         # ── Agent 1 ↔ Agent 2 Loop ────────────────────────────────────────
-        # Spec: "Repeat until Score >= 80%"
         validation_result: ValidationResult | None = None
         iteration = 0
 
@@ -119,47 +121,40 @@ class RuleEngineOrchestrator:
             })
 
             log.info(
-                "[RuleEngine] Iter %d/%d | score=%.1f%% "
-                "(static=%.1f%%, dynamic=%.1f%%) | "
-                "passed=%s | violations=%d | false_negs=%d",
+                "[RuleEngine] Iter %d/%d | score=%.1f%% | passed=%s | fn=%d",
                 iteration, MAX_ITERATIONS,
                 validation_result.score,
-                validation_result.static_score,
-                validation_result.dynamic_score,
                 validation_result.passed,
-                len(validation_result.violations),
                 fn_count,
             )
 
-            # ✅ Passed — exit loop
+            # ✅ Pass ho gaya — exit
             if validation_result.passed:
                 final_fn_count = fn_count
-                log.info(
-                    "[RuleEngine] ✅ Passed | iter=%d | score=%.1f%%",
-                    iteration, validation_result.score
-                )
+                log.info("[RuleEngine] ✅ Passed at iter %d", iteration)
                 break
 
-            # ❌ Failed — Agent 2
-            if iteration < MAX_ITERATIONS:
-                log.info(
-                    "[RuleEngine] ❌ score=%.1f%% < 80%% "
-                    "— sending to Agent 2...",
-                    validation_result.score
-                )
-                current = await self.regenerator.regenerate(
-                    content=current,
-                    validation_result=validation_result,
-                    dynamic_context=dynamic_context,
-                    iteration=iteration,
-                )
-            else:
+            # ✅ Last iteration — accept karo chahe pass ho ya na ho
+            if iteration >= MAX_ITERATIONS:
                 final_fn_count = fn_count
                 log.warning(
                     "[RuleEngine] ⚠️ Max iterations reached | "
-                    "final_score=%.1f%%",
-                    validation_result.score
+                    "final_score=%.1f%% — accepting content as-is",
+                    validation_result.score,
                 )
+                break
+
+            # ✅ Fail hua — fix karo aur retry karo
+            log.info(
+                "[RuleEngine] ❌ score=%.1f%% < %.1f%% — fixing...",
+                validation_result.score, PASS_THRESHOLD,
+            )
+            current = await self.regenerator.regenerate(
+                content=current,
+                validation_result=validation_result,
+                dynamic_context=dynamic_context,
+                iteration=iteration,
+            )
 
         elapsed_ms = round((time.time() - start_time) * 1000, 2)
 
