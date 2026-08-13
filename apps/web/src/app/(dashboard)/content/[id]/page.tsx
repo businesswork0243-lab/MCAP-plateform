@@ -391,9 +391,23 @@ export default function ContentWorkspacePage() {
   });
 
   const rehumanizeMutation = useMutation({
-    mutationFn: () => api.post(`/content/${id}/rehumanize`, { intensity: 'medium' }),
+    mutationFn: (deepMode: boolean = false) =>
+      api.post(
+        `/content/${id}/rehumanize`,
+        {
+          intensity: 'medium',
+          deepMode,
+        },
+        {
+          timeout: deepMode ? 260_000 : 100_000,
+        }
+      ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['content', id] }),
   });
+
+  const handleRehumanize = (deepMode: boolean = false) => {
+    rehumanizeMutation.mutate(deepMode);
+  };
 
   // Handlers
   const startEdit = () => {
@@ -814,15 +828,28 @@ export default function ContentWorkspacePage() {
                 Regenerate All
               </Button>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => rehumanizeMutation.mutate()}
-                disabled={rehumanizeMutation.isPending}
-              >
-                <RefreshCw className={cn('w-3 h-3 mr-1', rehumanizeMutation.isPending && 'animate-spin')} />
-                Re-humanize
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRehumanize(false)}
+                  disabled={rehumanizeMutation.isPending}
+                >
+                  <RefreshCw className={cn('w-3 h-3 mr-1', rehumanizeMutation.isPending && 'animate-spin')} />
+                  Re-humanize (Fast)
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRehumanize(true)}
+                  disabled={rehumanizeMutation.isPending}
+                  title="Deeper humanization with rule engine (2-3 min)"
+                >
+                  <Sparkles className="w-3 h-3 mr-1" />
+                  Re-humanize (Deep)
+                </Button>
+              </div>
             </div>
           )}
         </div>
