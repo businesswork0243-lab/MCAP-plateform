@@ -284,130 +284,180 @@ export default function ContentWorkspacePage() {
 
   const versionHistory: VersionRecord[] = versionData?.versions || [];
 
-  // ── Mutations ─────────────────────────────────────────────────────────────
-  
-  // Manual Edit mutation
-  const editMutation = useMutation({
-    mutationFn: (newContent: string) => {
-      if (!activeArtifact?.id) throw new Error('No artifact');
-      return api.patch(`/content/${id}/artifacts/${activeArtifact.id}`, {
-        content: newContent,
-        changeSummary: 'Manual edit',
-      });
-    },
-    onSuccess: () => {
+  // ─── Rehumanize Mutation ──────────────────────────────────────────────────────
+  const rehumanizeMutation = useMutation({
+    mutationFn: () =>
+      // ✅ aiApi use karo — 4 min timeout
+      // ✅ intensity only — no deepMode
+      aiApi.post(`/content/${id}/rehumanize`, {
+        intensity: 'medium',
+      }),
+    onSuccess: (response: any) => {
+      // Content refresh karo
       queryClient.invalidateQueries({ queryKey: ['content', id] });
-      queryClient.invalidateQueries({ 
-        queryKey: ['content-list'],
-        exact: false,
-      });
-      setMode('view');
-    },
-  });
-
-  // AI Refine mutation
-  const refineMutation = useMutation({
-    mutationFn: () => {
-      if (!activeArtifact?.id) throw new Error('No artifact');
-      return aiApi.post(`/content/${id}/artifacts/${activeArtifact.id}/refine`, {
-        userPrompt: refinePrompt,
-        quickTags: selectedTags,
-        preserveLength: false,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['content', id] });
-      queryClient.invalidateQueries({ 
-        queryKey: ['content-list'],
-        exact: false,
-      });
-      setRefinePrompt('');
-      setSelectedTags([]);
-      setMode('view');
+      // Version history bhi refresh karo agar open hai
+      if (activeArtifact?.id) {
+        queryClient.invalidateQueries({
+          queryKey: ['versions', id, activeArtifact.id],
+        });
+      }
     },
     onError: (error: any) => {
-      console.error('Refine failed:', error);
-      const detail = error?.response?.data?.detail || error?.response?.data?.error || error?.message || 'Unknown error';
-      alert(`AI Refinement failed: ${detail}`);
+      const detail =
+        error?.response?.data?.detail ||
+        error?.response?.data?.error   ||
+        error?.message                 ||
+        'Unknown error';
+
+      const status = error?.response?.status;
+
+      if (status === 504) {
+        alert('Re-humanize timed out. Rule engine took too long. Please try again.');
+      } else if (status === 503) {
+        alert('AI Engine is not available. Please try again in a moment.');
+      } else {
+        alert(`Re-humanize failed: ${detail}`);
+      }
     },
   });
 
-  // Approve mutation
-  const approveMutation = useMutation({
-    mutationFn: () => {
-      if (!activeArtifact?.id) throw new Error('No artifact');
-      return api.post(`/content/${id}/artifacts/${activeArtifact.id}/approve`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['content', id] });
-      queryClient.invalidateQueries({ 
-        queryKey: ['content-list'],
-        exact: false,
-      });
-    },
-  });
-
-  // Reject mutation
-  const rejectMutation = useMutation({
-    mutationFn: (reason: string) => {
-      if (!activeArtifact?.id) throw new Error('No artifact');
-      return api.post(`/content/${id}/artifacts/${activeArtifact.id}/reject`, {
-        reason,
-        note: reason,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['content', id] });
-      queryClient.invalidateQueries({ 
-        queryKey: ['content-list'],
-        exact: false,
-      });
-      setShowRejectModal(false);
-      setRejectReason('');
-    },
-  });
-
-  // Restore version mutation
-  const restoreMutation = useMutation({
-    mutationFn: (versionId: string) => {
-      if (!activeArtifact?.id) throw new Error('No artifact');
-      return api.post(`/content/${id}/artifacts/${activeArtifact.id}/restore/${versionId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['content', id] });
-      setMode('view');
-    },
-  });
-
-  // Rerun & Rehumanize
+  // ─── Rerun Mutation ───────────────────────────────────────────────────────────
   const rerunMutation = useMutation({
-    mutationFn: () => api.post(`/content/${id}/rerun`),
+    mutationFn: () =>
+      // ✅ generationApi use karo — 6 min timeout
+      aiApi.post(`/content/${id}/rerun`),
     onSuccess: (response: any) => {
       const newId = response.data?.requestId || response.data?.contentId;
       if (newId) {
         router.push(`/content/${newId}/generating`);
       }
     },
+    onError: (error: any) => {
+      const detail = error?.response?.data?.error || error?.message;
+      alert(`Regeneration failed: ${detail}`);
+    },
   });
 
-  const rehumanizeMutation = useMutation({
-    mutationFn: (deepMode: boolean = false) =>
-      api.post(
-        `/content/${id}/rehumanize`,
+  // ─── Edit Mutation ────────────────────────────────────────────────────────────
+  const editMutation = useMutation({
+    mutationFn: (newContent: string) => {
+      if (!activeArtifact?.id) throw new Error('No artifact selected');
+      return api.patch(`/content/${id}/artifacts/${activeArtifact.id}`, {
+        content:       newContent,
+        changeSummary: 'Manual edit',
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content', id] });
+      if (activeArtifact?.id) {
+        queryClient.invalidateQueries({
+          queryKey: ['versions', id, activeArtifact.id],
+        });
+      }
+      setMode('view');
+    },
+    onError: (error: any) => {
+      const detail = error?.response?.data?.error || error?.message;
+      alert(`Save failed: ${detail}`);
+    },
+  });
+
+  // ─── AI Refine Mutation ───────────────────────────────────────────────────────
+  const refineMutation = useMutation({
+    mutationFn: () => {
+      if (!activeArtifact?.id) throw new Error('No artifact selected');
+      // ✅ aiApi use karo — longer timeout
+      return aiApi.post(
+        `/content/${id}/artifacts/${activeArtifact.id}/refine`,
         {
-          intensity: 'medium',
-          deepMode,
-        },
-        {
-          timeout: deepMode ? 260_000 : 100_000,
+          userPrompt: refinePrompt,
+          quickTags:  selectedTags,
+          preserveLength: false,
         }
-      ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['content', id] }),
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content', id] });
+      if (activeArtifact?.id) {
+        queryClient.invalidateQueries({
+          queryKey: ['versions', id, activeArtifact.id],
+        });
+      }
+      setRefinePrompt('');
+      setSelectedTags([]);
+      setMode('view');
+    },
+    onError: (error: any) => {
+      const detail =
+        error?.response?.data?.detail ||
+        error?.response?.data?.error   ||
+        error?.message                 ||
+        'Unknown error';
+      alert(`AI Refinement failed: ${detail}`);
+    },
   });
 
-  const handleRehumanize = (deepMode: boolean = false) => {
-    rehumanizeMutation.mutate(deepMode);
-  };
+  // ─── Approve Mutation ─────────────────────────────────────────────────────────
+  const approveMutation = useMutation({
+    mutationFn: () => {
+      if (!activeArtifact?.id) throw new Error('No artifact selected');
+      return api.post(
+        `/content/${id}/artifacts/${activeArtifact.id}/approve`
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content', id] });
+      queryClient.invalidateQueries({ queryKey: ['content-list'], exact: false });
+    },
+    onError: (error: any) => {
+      const detail = error?.response?.data?.error || error?.message;
+      alert(`Approve failed: ${detail}`);
+    },
+  });
+
+  // ─── Reject Mutation ──────────────────────────────────────────────────────────
+  const rejectMutation = useMutation({
+    mutationFn: (reason: string) => {
+      if (!activeArtifact?.id) throw new Error('No artifact selected');
+      return api.post(
+        `/content/${id}/artifacts/${activeArtifact.id}/reject`,
+        { reason, note: reason }
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content', id] });
+      queryClient.invalidateQueries({ queryKey: ['content-list'], exact: false });
+      setShowRejectModal(false);
+      setRejectReason('');
+    },
+    onError: (error: any) => {
+      const detail = error?.response?.data?.error || error?.message;
+      alert(`Reject failed: ${detail}`);
+    },
+  });
+
+  // ─── Restore Mutation ─────────────────────────────────────────────────────────
+  const restoreMutation = useMutation({
+    mutationFn: (versionId: string) => {
+      if (!activeArtifact?.id) throw new Error('No artifact selected');
+      return api.post(
+        `/content/${id}/artifacts/${activeArtifact.id}/restore/${versionId}`
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content', id] });
+      if (activeArtifact?.id) {
+        queryClient.invalidateQueries({
+          queryKey: ['versions', id, activeArtifact.id],
+        });
+      }
+      setMode('view');
+    },
+    onError: (error: any) => {
+      const detail = error?.response?.data?.error || error?.message;
+      alert(`Restore failed: ${detail}`);
+    },
+  });
 
   // Handlers
   const startEdit = () => {
@@ -813,43 +863,50 @@ export default function ContentWorkspacePage() {
             )}
           </div>
 
-          {/* Agent Actions Bar (View Mode) */}
+          {/* ── Agent Actions Bar ── */}
           {mode === 'view' && hasContent && (
             <div className="border-t px-6 py-3 flex items-center gap-2 flex-wrap bg-card/30">
-              <span className="text-xs text-muted-foreground mr-2 font-medium">Actions:</span>
+              <span className="text-xs text-muted-foreground mr-2 font-medium">
+                Actions:
+              </span>
 
+              {/* Regenerate All */}
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => rerunMutation.mutate()}
                 disabled={rerunMutation.isPending}
               >
-                <RefreshCw className={cn('w-3 h-3 mr-1', rerunMutation.isPending && 'animate-spin')} />
-                Regenerate All
+                <RefreshCw className={cn(
+                  'w-3 h-3 mr-1',
+                  rerunMutation.isPending && 'animate-spin'
+                )} />
+                {rerunMutation.isPending ? 'Regenerating...' : 'Regenerate All'}
               </Button>
 
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleRehumanize(false)}
-                  disabled={rehumanizeMutation.isPending}
-                >
-                  <RefreshCw className={cn('w-3 h-3 mr-1', rehumanizeMutation.isPending && 'animate-spin')} />
-                  Re-humanize (Fast)
-                </Button>
+              {/* ✅ Single Re-humanize — Rule Engine hamesha */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => rehumanizeMutation.mutate()}
+                disabled={rehumanizeMutation.isPending}
+              >
+                <Sparkles className={cn(
+                  'w-3 h-3 mr-1',
+                  rehumanizeMutation.isPending && 'animate-spin'
+                )} />
+                {rehumanizeMutation.isPending
+                  ? 'Humanizing...'
+                  : 'Re-humanize'
+                }
+              </Button>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleRehumanize(true)}
-                  disabled={rehumanizeMutation.isPending}
-                  title="Deeper humanization with rule engine (2-3 min)"
-                >
-                  <Sparkles className="w-3 h-3 mr-1" />
-                  Re-humanize (Deep)
-                </Button>
-              </div>
+              {/* Loading indicator */}
+              {rehumanizeMutation.isPending && (
+                <span className="text-xs text-muted-foreground">
+                  ~2-3 min (rule engine running...)
+                </span>
+              )}
             </div>
           )}
         </div>

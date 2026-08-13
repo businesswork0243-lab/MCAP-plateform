@@ -7,11 +7,14 @@ import { logger } from '../../lib/logger';
 import { ContentJobData } from '../queue';
 import { emitToOrg } from '../../services/websocket';
 
+// ✅ Shared keepalive — duplicate code hata diya
+import { waitForAiEngine, markAiEngineAlive } from '../../services/keepalive';
+
 // ── Config ────────────────────────────────────────────────────────────────────
 
 const AI_ENGINE_URL = (
   process.env.AI_ENGINE_URL || 'http://localhost:8000'
-).replace(/\/$/, ''); // Trailing slash remove karo
+).replace(/\/$/, '');
 
 const AI_TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS) || 180_000;
 
@@ -35,73 +38,6 @@ function getRedisConnection() {
   };
 }
 
-// ── AI Engine Status (Shared State) ──────────────────────────────────────────
-
-let _aiEngineLastSeen = 0; // Last successful ping timestamp
-
-function markAiEngineAwake() {
-  _aiEngineLastSeen = Date.now();
-}
-
-function isAiEngineLikelyAwake(): boolean {
-  // Agar last 8 minute mein ping hua tha toh assume awake hai
-  return Date.now() - _aiEngineLastSeen < 8 * 60 * 1000;
-}
-
-// ── Wake Up AI Engine ─────────────────────────────────────────────────────────
-
-async function wakeUpAIEngine(): Promise<boolean> {
-  // Agar recently awake tha toh skip karo
-  if (isAiEngineLikelyAwake()) {
-    logger.info('✅ AI Engine recently seen, skipping wake-up ping');
-    return true;
-  }
-
-  logger.info('Pinging AI Engine to wake it up...', { url: AI_ENGINE_URL });
-
-  // Progressive wait strategy:
-  // Attempt 1: wait 0s  (immediate check)
-  // Attempt 2: wait 15s
-  // Attempt 3: wait 20s
-  // Attempt 4: wait 25s
-  // Attempt 5: wait 30s
-  // Attempt 6: wait 30s
-  // Attempt 7: wait 30s
-  // Attempt 8: wait 30s
-  // Total max wait: ~3.5 minutes
-  const waitsBetween = [0, 15_000, 20_000, 25_000, 30_000, 30_000, 30_000, 30_000];
-  const maxAttempts = waitsBetween.length;
-
-  for (let i = 0; i < maxAttempts; i++) {
-    // Wait before attempt (except first)
-    if (waitsBetween[i] > 0) {
-      await new Promise(r => setTimeout(r, waitsBetween[i]));
-    }
-
-    try {
-      const res = await axios.get(`${AI_ENGINE_URL}/health`, {
-        timeout: 12_000, // 12s per ping attempt
-      });
-
-      if (res.status === 200) {
-        markAiEngineAwake();
-        logger.info(`✅ AI Engine is awake (attempt ${i + 1}/${maxAttempts})`);
-        return true;
-      }
-    } catch {
-      const elapsedSec = Math.round(
-        waitsBetween.slice(0, i + 1).reduce((a, b) => a + b, 0) / 1000
-      );
-      logger.warn(
-        `⏳ AI Engine waking up... attempt ${i + 1}/${maxAttempts} | elapsed: ~${elapsedSec}s`
-      );
-    }
-  }
-
-  logger.error('❌ AI Engine failed to wake up after ~3.5 minutes');
-  return false;
-}
-
 // ── DB Helpers ────────────────────────────────────────────────────────────────
 
 async function updateRequestStatus(
@@ -122,8 +58,7 @@ async function updateRequestStatus(
 
     await query(
       `UPDATE content_requests
-       SET ${updates.join(', ')},
-           error_message = $2
+       SET ${updates.join(', ')}, error_message = $2
        WHERE id = $3`,
       params
     );
@@ -160,7 +95,6 @@ async function logAgentExecution(
       ]
     );
   } catch (err) {
-    // Non-critical
     logger.warn('Failed to log agent execution', {
       err: err instanceof Error ? err.message : err,
       agentName,
@@ -185,14 +119,7 @@ async function saveArtifact(
     [id, requestId, contentType, body, JSON.stringify(metadata)]
   );
 
-  logger.debug('Artifact saved', {
-    id,
-    requestId,
-    platform,
-    contentType,
-    bodyLength: body.length,
-  });
-
+  logger.debug('Artifact saved', { id, requestId, platform, contentType });
   return id;
 }
 
@@ -216,24 +143,24 @@ interface PipelineResponse {
 
 async function callFullPipeline(jobData: ContentJobData): Promise<PipelineResponse> {
   const payload = {
-    topic:                 jobData.topic,
-    objective:             jobData.objective || 'Build thought leadership',
-    context:               jobData.context || '',
-    audience:              jobData.audience || 'General Business',
-    icp_description:       jobData.icp_description || '',
-    perspective:           jobData.perspective || 'Founder',
-    writing_structure:     jobData.writing_structure || 'thesis',
-    cta:                   jobData.cta || '',
-    targetPlatforms:       jobData.targetPlatforms || ['linkedin_post'],
-    brandProfile:          jobData.brandProfile || null,
-    enableHumanization:    jobData.enableHumanization ?? true,
+    topic: jobData.topic,
+    objective: jobData.objective || 'Build thought leadership',
+    context: jobData.context || '',
+    audience: jobData.audience || 'General Business',
+    icp_description: jobData.icp_description || '',
+    perspective: jobData.perspective || 'Founder',
+    writing_structure: jobData.writing_structure || 'thesis',
+    cta: jobData.cta || '',
+    targetPlatforms: jobData.targetPlatforms || ['linkedin_post'],
+    brandProfile: jobData.brandProfile || null,
+    enableHumanization: jobData.enableHumanization ?? true,
     humanizationIntensity: jobData.humanizationIntensity || 'medium',
-    enableQA:              jobData.enableQA ?? true,
-    language:              jobData.language || 'English',
-    keywords:              jobData.keywords || [],
-    specialInstructions:   jobData.specialInstructions || '',
-    seoEnabled:            jobData.seoEnabled ?? false,
-    seoSettings:           jobData.seoSettings || {},
+    enableQA: jobData.enableQA ?? true,
+    language: jobData.language || 'English',
+    keywords: jobData.keywords || [],
+    specialInstructions: jobData.specialInstructions || '',
+    seoEnabled: jobData.seoEnabled ?? false,
+    seoSettings: jobData.seoSettings || {},
   };
 
   logger.info('📡 Calling AI Engine /pipeline/run', {
@@ -258,19 +185,15 @@ async function callFullPipeline(jobData: ContentJobData): Promise<PipelineRespon
   return response.data;
 }
 
-// ── Progress Helper ───────────────────────────────────────────────────────────
+// ── Progress ──────────────────────────────────────────────────────────────────
 
 const PROGRESS = {
-  QUEUED:          5,
-  WAKING_AI:       10,
-  FETCHING_BRAND:  20,
+  QUEUED: 5,
+  WAKING_AI: 10,
+  FETCHING_BRAND: 20,
   CANONICAL_START: 30,
-  PLATFORM_START:  50,
-  BRAND_START:     70,
-  HUMANIZE_START:  82,
-  QA_START:        92,
-  SAVING:          98,
-  COMPLETE:        100,
+  SAVING: 98,
+  COMPLETE: 100,
 } as const;
 
 function emitProgress(
@@ -282,31 +205,27 @@ function emitProgress(
 ): void {
   try {
     emitToOrg(orgId, 'content:progress', { requestId, progress, step, ...extra });
-    logger.debug('Progress emitted', { requestId, progress, step });
   } catch (err) {
     logger.warn('emitProgress failed', { requestId, err });
   }
 }
 
+// ── Brand Fetch ───────────────────────────────────────────────────────────────
+
 async function fetchBrandWithDocuments(
   brandProfileId: string | null | undefined
 ): Promise<Record<string, unknown> | null> {
-  if (!brandProfileId) return null
+  if (!brandProfileId) return null;
 
   try {
-    // Brand profile fetch
     const rows = await query(
       'SELECT * FROM brand_profiles WHERE id = $1',
       [brandProfileId]
-    )
-    const brand = rows[0]
-    if (!brand) return null
+    );
+    const brand = rows[0];
+    if (!brand) return null;
 
-    // Documents fetch
-    const docs = await query<{
-      name: string
-      parsed_content: string
-    }>(
+    const docs = await query<{ name: string; parsed_content: string }>(
       `SELECT name, parsed_content
        FROM brand_documents
        WHERE brand_profile_id = $1
@@ -315,63 +234,61 @@ async function fetchBrandWithDocuments(
        ORDER BY created_at DESC
        LIMIT 5`,
       [brandProfileId]
-    )
+    );
 
     const documentContext = docs.length > 0
       ? docs.map(d => `=== ${d.name} ===\n${d.parsed_content}`)
-             .join('\n\n')
-             .slice(0, 8000)
-      : ''
+        .join('\n\n')
+        .slice(0, 8000)
+      : '';
 
-    // Helper
     const parseJson = (val: unknown): unknown[] => {
-      if (Array.isArray(val)) return val
+      if (Array.isArray(val)) return val;
       if (typeof val === 'string') {
-        try { return JSON.parse(val) } catch { return [] }
+        try { return JSON.parse(val); } catch { return []; }
       }
-      return []
-    }
+      return [];
+    };
 
-    logger.info('Brand refetched in worker', {
-      brandId:      brandProfileId,
-      docCount:     docs.length,
+    logger.info('Brand fetched in worker', {
+      brandId: brandProfileId,
+      docCount: docs.length,
       contextChars: documentContext.length,
-    })
+    });
 
     return {
       ...brand,
       tone_settings: {
-        formality:      brand.tone_formality      ?? 5,
-        technical:      brand.tone_technical      ?? 5,
-        confidence:     brand.tone_confidence     ?? 5,
-        emotion:        brand.tone_emotion        ?? 5,
-        humor:          brand.tone_humor          ?? 2,
-        storytelling:   brand.tone_storytelling   ?? 5,
+        formality: brand.tone_formality ?? 5,
+        technical: brand.tone_technical ?? 5,
+        confidence: brand.tone_confidence ?? 5,
+        emotion: brand.tone_emotion ?? 5,
+        humor: brand.tone_humor ?? 2,
+        storytelling: brand.tone_storytelling ?? 5,
         persuasiveness: brand.tone_persuasiveness ?? 5,
-        assertiveness:  brand.tone_assertiveness  ?? 5,
-        enthusiasm:     brand.tone_enthusiasm     ?? 5,
-        empathy:        brand.tone_empathy        ?? 5,
+        assertiveness: brand.tone_assertiveness ?? 5,
+        enthusiasm: brand.tone_enthusiasm ?? 5,
+        empathy: brand.tone_empathy ?? 5,
       },
-      preferred_terms:  parseJson(brand.preferred_terms),
-      banned_phrases:   parseJson(brand.banned_phrases),
-      key_messages:     parseJson(brand.key_messages),
-      likes:            parseJson(brand.likes),
-      hates:            parseJson(brand.hates),
-      stands_for:        parseJson(brand.stands_for),
-      stands_against:   parseJson(brand.stands_against),
-      core_values:      parseJson(brand.core_values),
+      preferred_terms: parseJson(brand.preferred_terms),
+      banned_phrases: parseJson(brand.banned_phrases),
+      key_messages: parseJson(brand.key_messages),
+      likes: parseJson(brand.likes),
+      hates: parseJson(brand.hates),
+      stands_for: parseJson(brand.stands_for),
+      stands_against: parseJson(brand.stands_against),
+      core_values: parseJson(brand.core_values),
       core_motivations: parseJson(brand.core_motivations),
       document_context: documentContext,
-      has_documents:    docs.length > 0,
-      document_count:   docs.length,
-    }
-
+      has_documents: docs.length > 0,
+      document_count: docs.length,
+    };
   } catch (err) {
-    logger.error('Brand refetch failed in worker', {
+    logger.error('Brand fetch failed', {
       brandProfileId,
       error: err instanceof Error ? err.message : err,
-    })
-    return null
+    });
+    return null;
   }
 }
 
@@ -395,67 +312,59 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
   emitProgress(organizationId, requestId, PROGRESS.QUEUED, 'initializing');
 
   try {
-    // ── Step 1: Wake AI Engine ──────────────────────────────────
+    // ── Step 1: AI Engine check ───────────────────────────────────────────
     emitProgress(organizationId, requestId, PROGRESS.WAKING_AI, 'waking_ai_engine');
 
-    const isAwake = await wakeUpAIEngine();
+    // ✅ Shared keepalive.ts ka function use karo — duplicate nahi
+    const isAwake = await waitForAiEngine(3 * 60 * 1000); // 3 min max
     if (!isAwake) {
       throw new Error(
-        'AI Engine did not respond after 3.5 minutes. Please try again in a moment.'
+        'AI Engine did not respond after 3 minutes. Please try again.'
       );
     }
 
-    // ── Step 2: Fetching context ────────────────────────────────
+    // ── Step 2: Brand fetch ───────────────────────────────────────────────
     emitProgress(organizationId, requestId, PROGRESS.FETCHING_BRAND, 'fetching_brand_context');
 
-    // ✅ Worker level pe fresh brand data fetch karo
-    const freshBrandProfile = await fetchBrandWithDocuments(
-      job.data.brandProfileId
-    )
+    const freshBrandProfile = await fetchBrandWithDocuments(job.data.brandProfileId);
 
     if (freshBrandProfile) {
-      logger.info('Fresh brand loaded in worker', {
+      logger.info('Fresh brand loaded', {
         requestId,
-        brandName:    freshBrandProfile.name,
-        hasDocs:      freshBrandProfile.has_documents,
-        docCount:     freshBrandProfile.document_count,
+        brandName: freshBrandProfile.name,
+        hasDocs: freshBrandProfile.has_documents,
         contextChars: (freshBrandProfile.document_context as string)?.length ?? 0,
-      })
+      });
     }
 
-    await new Promise(r => setTimeout(r, 300)); // Small UI feedback delay
-
-    // ── Step 3: Start pipeline ──────────────────────────────────
+    // ── Step 3: Pipeline ──────────────────────────────────────────────────
     emitProgress(organizationId, requestId, PROGRESS.CANONICAL_START, 'ai_generating');
     await logAgentExecution(requestId, 'canonical_writer', 'started');
 
     const pipelineStart = Date.now();
 
-    // ✅ HONEST heartbeat — progress based on realistic pipeline timing
-    // Real pipeline: canonical (15s) → platform (20s) → brand (15s) → humanize (25s) → qa (10s)
+    // Heartbeat — realistic progress updates
     const heartbeat = setInterval(() => {
       const elapsedSec = Math.floor((Date.now() - pipelineStart) / 1000);
-
       let progress: number;
       let step: string;
 
       if (elapsedSec < 15) {
-        progress = 30 + Math.floor((elapsedSec / 15) * 15);  // 30→45
+        progress = 30 + Math.floor((elapsedSec / 15) * 15);
         step = 'writing_canonical_draft';
       } else if (elapsedSec < 35) {
-        progress = 45 + Math.floor(((elapsedSec - 15) / 20) * 15);  // 45→60
+        progress = 45 + Math.floor(((elapsedSec - 15) / 20) * 15);
         step = 'platform_optimization';
       } else if (elapsedSec < 50) {
-        progress = 60 + Math.floor(((elapsedSec - 35) / 15) * 12);  // 60→72
+        progress = 60 + Math.floor(((elapsedSec - 35) / 15) * 12);
         step = 'brand_alignment';
       } else if (elapsedSec < 75) {
-        progress = 72 + Math.floor(((elapsedSec - 50) / 25) * 15);  // 72→87
+        progress = 72 + Math.floor(((elapsedSec - 50) / 25) * 15);
         step = 'humanizing_content';
       } else if (elapsedSec < 90) {
-        progress = 87 + Math.floor(((elapsedSec - 75) / 15) * 6);   // 87→93
+        progress = 87 + Math.floor(((elapsedSec - 75) / 15) * 6);
         step = 'quality_assurance';
       } else {
-        // Long-running: cap at 95%
         progress = Math.min(95, 93 + Math.floor((elapsedSec - 90) / 20));
         step = 'finalizing';
       }
@@ -467,7 +376,7 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
     try {
       result = await callFullPipeline({
         ...job.data,
-        brandProfile: (freshBrandProfile || job.data.brandProfile) as any,  // Override with fresh data
+        brandProfile: (freshBrandProfile || job.data.brandProfile) as any,
       });
     } finally {
       clearInterval(heartbeat);
@@ -487,15 +396,15 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
       durationMs: pipelineDurationMs,
     });
 
-    // ── Step 4: Save Results ────────────────────────────────────
+    // ── Step 4: Save ──────────────────────────────────────────────────────
     emitProgress(organizationId, requestId, PROGRESS.SAVING, 'saving_results', {
       artifactCount: result.artifacts.length,
     });
 
-    // Canonical draft save karo (sirf ek baar)
+    // Canonical
     await saveArtifact(requestId, 'canonical', 'canonical', result.canonicalDraft);
 
-    // Platform artifacts save karo
+    // Platform artifacts
     for (const artifact of result.artifacts) {
       await saveArtifact(
         requestId, artifact.platform, 'platform_adapted', artifact.platformVariant
@@ -503,26 +412,17 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
       await saveArtifact(
         requestId, artifact.platform, 'brand_aligned', artifact.brandAligned
       );
-
-      // Humanized sirf tab save karo jab alag ho
       if (artifact.humanized && artifact.humanized !== artifact.brandAligned) {
         await saveArtifact(
           requestId, artifact.platform, 'humanized', artifact.humanized
         );
       }
-
-      // QA reviewed - final content
       await saveArtifact(
         requestId, artifact.platform, 'qa_reviewed', artifact.finalContent,
-        {
-          qa: artifact.qa,
-          overallScore: artifact.overallScore,
-          passed: artifact.passed,
-        }
+        { qa: artifact.qa, overallScore: artifact.overallScore, passed: artifact.passed }
       );
     }
 
-    // Token count update karo
     await query(
       `UPDATE content_requests SET total_tokens_used = $1 WHERE id = $2`,
       [result.totalTokensUsed, requestId]
@@ -530,7 +430,7 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
 
     await updateRequestStatus(requestId, 'awaiting_review');
 
-    // ── Step 5: Complete! ───────────────────────────────────────
+    // ── Step 5: Done ──────────────────────────────────────────────────────
     emitProgress(organizationId, requestId, PROGRESS.COMPLETE, 'completed', {
       artifactCount: result.artifacts.length,
       totalTokens: result.totalTokensUsed,
@@ -542,10 +442,10 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
       totalTokens: result.totalTokensUsed,
     });
 
-    // AI engine recently worked, mark it
-    markAiEngineAwake();
+    // ✅ Shared state update karo
+    markAiEngineAlive();
 
-    logger.info('🎉 Content job completed', {
+    logger.info('🎉 Job done', {
       requestId,
       totalDurationMs: Date.now() - startTime,
       tokens: result.totalTokensUsed,
@@ -553,8 +453,8 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
     });
 
   } catch (err) {
-    // ── Error Handling ──────────────────────────────────────────
     const errorMsg = parseError(err);
+    const isFinalAttempt = attempt >= maxAttempts;
 
     logger.error('❌ Content job failed', {
       requestId,
@@ -568,21 +468,14 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
       durationMs: Date.now() - startTime,
     });
 
-    const isFinalAttempt = attempt >= maxAttempts;
-
     if (isFinalAttempt) {
       await updateRequestStatus(requestId, 'generation_failed', errorMsg);
-
       emitToOrg(organizationId, 'content:failed', {
         requestId,
         error: errorMsg,
         canRetry: false,
       });
-
-      logger.warn('Job failed permanently', { requestId, jobId: job.id });
     } else {
-      logger.info(`⏳ Will retry (${attempt}/${maxAttempts})`, { requestId });
-
       emitToOrg(organizationId, 'content:retrying', {
         requestId,
         attempt,
@@ -591,7 +484,7 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
       });
     }
 
-    throw err; // BullMQ retry ke liye re-throw karo
+    throw err;
   }
 }
 
@@ -600,37 +493,23 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
 function parseError(err: unknown): string {
   if (err instanceof AxiosError) {
     if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
-      return 'AI Engine request timed out - content generation took too long';
+      return 'AI Engine timed out';
     }
     if (err.code === 'ECONNREFUSED') {
-      return 'AI Engine is not running - service may be down';
+      return 'AI Engine is not running';
     }
     if (err.response) {
-      // ✅ Extract detail field from FastAPI error response
       const data = err.response.data;
-      let detail: string;
-
-      if (typeof data === 'object' && data !== null) {
-        detail = (data as any).detail 
-              || (data as any).error 
-              || JSON.stringify(data).slice(0, 300);
-      } else {
-        detail = String(data).slice(0, 300);
-      }
-
+      const detail = typeof data === 'object' && data !== null
+        ? (data as any).detail || (data as any).error || JSON.stringify(data).slice(0, 300)
+        : String(data).slice(0, 300);
       return `AI Engine [${err.response.status}]: ${detail}`;
     }
-    if (err.request) {
-      return 'AI Engine unreachable - no response received';
-    }
+    if (err.request) return 'AI Engine unreachable';
     return err.message;
   }
-
-  if (err instanceof Error) {
-    return err.message;
-  }
-
-  return 'Unknown error occurred';
+  if (err instanceof Error) return err.message;
+  return 'Unknown error';
 }
 
 // ── Start Worker ──────────────────────────────────────────────────────────────
@@ -642,35 +521,29 @@ export function startContentWorker(): void {
     {
       connection: getRedisConnection(),
       concurrency: Number(process.env.WORKER_CONCURRENCY) || 2,
-      limiter: {
-        max: 5,
-        duration: 60_000,
-      },
+      limiter: { max: 5, duration: 60_000 },
     }
   );
 
-  worker.on('completed', (job) => {
-    logger.info('Worker: Job completed', { jobId: job.id });
-  });
-
-  worker.on('failed', (job, err) => {
+  worker.on('completed', (job) =>
+    logger.info('Worker: Job completed', { jobId: job.id })
+  );
+  worker.on('failed', (job, err) =>
     logger.error('Worker: Job failed', {
       jobId: job?.id,
       error: err.message,
       attempts: job?.attemptsMade,
-    });
-  });
-
-  worker.on('error', (err) => {
-    logger.error('Worker error', { error: err.message });
-  });
-
-  worker.on('active', (job) => {
+    })
+  );
+  worker.on('error', (err) =>
+    logger.error('Worker error', { error: err.message })
+  );
+  worker.on('active', (job) =>
     logger.info('Worker: Job started', {
       jobId: job.id,
       requestId: job.data.requestId,
-    });
-  });
+    })
+  );
 
   logger.info('✅ Content worker started', {
     concurrency: worker.opts.concurrency,
@@ -678,9 +551,8 @@ export function startContentWorker(): void {
     timeout: `${AI_TIMEOUT_MS}ms`,
   });
 
-  // Graceful shutdown
   process.on('SIGTERM', async () => {
-    logger.info('SIGTERM received, closing worker gracefully...');
+    logger.info('SIGTERM — closing worker...');
     await worker.close();
     logger.info('Worker closed');
   });

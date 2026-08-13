@@ -867,107 +867,267 @@ contentRouter.post('/:id/rerun', async (req: AuthenticatedRequest, res: Response
 
 // ─── POST /api/content/:id/rehumanize ─────────────────────────────────────────
 
-contentRouter.post('/:id/rehumanize', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  try {
-    const request = await queryOne(
-      'SELECT * FROM content_requests WHERE id = $1 AND organization_id = $2',
-      [req.params.id, req.user!.organizationId]
-    );
+contentRouter.post(
+  '/:id/rehumanize',
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+      // ── 1. Request verify karo ────────────────────────────────────────────
+      const request = await queryOne<{
+        id: string;
+        brand_profile_id: string | null;
+        status: string;
+      }>(
+        `SELECT id, brand_profile_id, status
+         FROM content_requests
+         WHERE id = $1 AND organization_id = $2`,
+        [req.params.id, req.user!.organizationId]
+      );
 
-    if (!request) {
-      res.status(404).json({ error: 'Content not found' });
-      return;
-    }
+      if (!request) {
+        res.status(404).json({ error: 'Content not found' });
+        return;
+      }
 
-    // Get latest artifact
-    const artifact = await queryOne<{ content: string; agent_type: string; metadata: any }>(
-      `SELECT content, agent_type, metadata FROM artifacts
-       WHERE content_request_id = $1
-       ORDER BY created_at DESC LIMIT 1`,
-      [req.params.id]
-    );
+      // ── 2. Best artifact fetch karo ───────────────────────────────────────
+      // Priority: qa_reviewed > humanized > brand_aligned > platform_adapted > canonical
+      const artifact = await queryOne<{
+        id:             string;
+        content:        string;
+        edited_content: string | null;
+        agent_type:     string;
+        metadata:       any;
+      }>(
+        `SELECT id, content, edited_content, agent_type, metadata
+         FROM artifacts
+         WHERE content_request_id = $1
+         ORDER BY
+           CASE agent_type
+             WHEN 'qa_reviewed'      THEN 1
+             WHEN 'humanized'        THEN 2
+             WHEN 'brand_aligned'    THEN 3
+             WHEN 'platform_adapted' THEN 4
+             WHEN 'canonical'        THEN 5
+             ELSE 6
+           END,
+           created_at DESC
+         LIMIT 1`,
+        [req.params.id]
+      );
 
-    if (!artifact) {
-      res.status(400).json({ error: 'No content to humanize' });
-      return;
-    }
+      if (!artifact) {
+        res.status(400).json({ error: 'No content found to humanize' });
+        return;
+      }
 
-    // ✅ FIX: Fetch brand WITH documents before calling humanizer
-    const brandProfile = await fetchBrandProfileWithDocs(request.brand_profile_id as string | null);
+      // Edited content prefer karo agar available ho
+      const sourceContent = artifact.edited_content || artifact.content;
 
-    // Determine platform
-    let platform = 'canonical';
-    if (artifact.metadata) {
+      if (!sourceContent || sourceContent.trim().length === 0) {
+        res.status(400).json({ error: 'Source content is empty' });
+        return;
+      }
+
+      // ── 3. Platform extract karo ──────────────────────────────────────────
+      let platform = 'canonical';
       try {
         const meta = typeof artifact.metadata === 'string'
           ? JSON.parse(artifact.metadata)
-          : artifact.metadata;
+          : artifact.metadata || {};
         if (meta?.platform) platform = meta.platform;
-      } catch {}
-    }
+      } catch { /* ignore */ }
 
-    // Call AI Engine humanizer
-    const aiUrl = process.env.AI_ENGINE_URL || 'http://localhost:8000';
+      // ── 4. Brand profile WITH documents fetch karo ────────────────────────
+      const brandProfile = await fetchBrandProfileWithDocs(
+        request.brand_profile_id
+      );
 
-    // ✅ Deep mode flag (default: false = fast)
-    const deepMode = req.body.deepMode === true;
-    const intensity = req.body.intensity || 'medium';
+      const intensity = (req.body.intensity as string) || 'medium';
 
-    logger.info('Calling rehumanizer', {
-      requestId: req.params.id,
-      contentChars: artifact.content.length,
-      platform,
-      hasBrand: !!brandProfile,
-      deepMode,
-      intensity,
-    });
-
-    // ✅ Timeout based on mode
-    const timeoutMs = deepMode ? 240_000 : 90_000;  // 4min or 90s
-
-    const response = await axios.post(
-      `${aiUrl}/agents/humanizer`,
-      {
-        content: artifact.content,
-        intensity,
-        brandProfile: brandProfile,
-        extraContext: {
-          platform,
-          content_type: 'article',
-          skip_rule_engine: !deepMode,  // ✅ Fast mode skips rule engine
-        },
-        requestId: req.params.id,
-      },
-      { 
-        timeout: timeoutMs,
-        maxContentLength: 50 * 1024 * 1024,
-        maxBodyLength: 50 * 1024 * 1024,
+      // Validate intensity
+      if (!['light', 'medium', 'aggressive'].includes(intensity)) {
+        res.status(400).json({
+          error: 'Invalid intensity. Use: light, medium, aggressive',
+        });
+        return;
       }
-    );
 
-    // Save new artifact
-    const newArtifactId = uuidv4();
-    const newMetadata = {
-      platform,
-      contentType: 'humanized',
-    };
-    await query(
-      `INSERT INTO artifacts
-        (id, content_request_id, agent_type, content, status, metadata, version)
-       VALUES ($1, $2, 'humanized', $3, 'generated', $4, 1)`,
-      [newArtifactId, req.params.id, response.data.content, JSON.stringify(newMetadata)]
-    );
+      const aiUrl = process.env.AI_ENGINE_URL || 'http://localhost:8000';
 
-    res.json({
-      artifactId: newArtifactId,
-      content: response.data.content,
-      tokensUsed: response.data.tokensUsed || 0,
-    });
-  } catch (err) {
-    logger.error('POST /rehumanize error:', { error: err });
-    res.status(500).json({ error: 'Failed to rehumanize' });
+      logger.info('Re-humanizing content', {
+        requestId:    req.params.id,
+        artifactId:   artifact.id,
+        agentType:    artifact.agent_type,
+        contentChars: sourceContent.length,
+        platform,
+        intensity,
+        hasBrand:     !!brandProfile,
+        hasBrandDocs: brandProfile?.has_documents || false,
+      });
+
+      // ── 5. AI Engine call ─────────────────────────────────────────────────
+      // ✅ Rule engine HAMESHA run hoga — skip_rule_engine: false
+      const response = await axios.post(
+        `${aiUrl}/agents/humanizer`,
+        {
+          content:   sourceContent,
+          intensity,
+          brandProfile,
+          extraContext: {
+            platform,
+            content_type:      'article',
+            skip_rule_engine:  false,  // ✅ ALWAYS run rule engine
+            objective:         'rehumanize',
+          },
+          requestId: req.params.id,
+        },
+        {
+          timeout: 240_000, // 4 min — rule engine ke saath kaafi
+          maxContentLength: 50 * 1024 * 1024,
+          maxBodyLength:    50 * 1024 * 1024,
+        }
+      );
+
+      const newContent  = response.data?.content;
+      const tokensUsed  = response.data?.tokensUsed  || 0;
+      const ruleEngine  = response.data?.metadata?.rule_engine || {};
+
+      if (!newContent || typeof newContent !== 'string') {
+        logger.error('AI Engine returned invalid content', {
+          requestId: req.params.id,
+          response:  JSON.stringify(response.data).slice(0, 200),
+        });
+        res.status(500).json({ error: 'AI Engine returned invalid response' });
+        return;
+      }
+
+      // ── 6. New artifact save karo ─────────────────────────────────────────
+      const newArtifactId = uuidv4();
+      const newMetadata   = {
+        platform,
+        contentType:    'humanized',
+        rehumanized:    true,
+        ruleEngineScore: ruleEngine.final_score || null,
+      };
+
+      await query(
+        `INSERT INTO artifacts
+          (id, content_request_id, agent_type, content, status, metadata, version)
+         VALUES ($1, $2, 'humanized', $3, 'generated', $4, 1)`,
+        [
+          newArtifactId,
+          req.params.id,
+          newContent,
+          JSON.stringify(newMetadata),
+        ]
+      );
+
+      // ── 7. Version history save karo ──────────────────────────────────────
+      try {
+        // Previous version number fetch karo
+        const prevVersion = await queryOne<{
+          id:             string;
+          version_number: number;
+        }>(
+          `SELECT id, version_number
+           FROM content_versions
+           WHERE artifact_id = $1
+           ORDER BY version_number DESC
+           LIMIT 1`,
+          [artifact.id]
+        );
+
+        await query(
+          `INSERT INTO content_versions (
+            id, content_request_id, artifact_id,
+            version_number, platform, content,
+            change_type, change_summary,
+            tokens_used, char_diff,
+            previous_version_id
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'humanized', $7, $8, $9, $10)`,
+          [
+            uuidv4(),
+            req.params.id,
+            artifact.id,
+            (prevVersion?.version_number || 1) + 1,
+            platform,
+            newContent,
+            `Re-humanized (${intensity}) with brand rules | Score: ${ruleEngine.final_score || 'N/A'}`,
+            tokensUsed,
+            newContent.length - sourceContent.length,
+            prevVersion?.id || null,
+          ]
+        );
+      } catch (versionErr) {
+        // Non-critical — version save fail hone pe bhi response do
+        logger.warn('Version history save failed (non-fatal)', {
+          error: versionErr instanceof Error ? versionErr.message : versionErr,
+        });
+      }
+
+      logger.info('Re-humanize complete', {
+        requestId:       req.params.id,
+        newArtifactId,
+        tokensUsed,
+        ruleEngineScore: ruleEngine.final_score,
+        ruleEnginePassed: ruleEngine.passed,
+        charDiff:        newContent.length - sourceContent.length,
+      });
+
+      // ── 8. Response ───────────────────────────────────────────────────────
+      res.json({
+        artifactId:  newArtifactId,
+        content:     newContent,
+        tokensUsed,
+        platform,
+        ruleEngine: {
+          score:      ruleEngine.final_score   || null,
+          passed:     ruleEngine.passed        || false,
+          iterations: ruleEngine.iterations    || 0,
+          falseNegativesEliminated:
+            ruleEngine.false_negatives_eliminated || 0,
+        },
+        message: 'Content re-humanized successfully',
+      });
+
+    } catch (err) {
+      logger.error('POST /rehumanize error:', {
+        requestId: req.params.id,
+        error:     err instanceof Error ? err.message : err,
+      });
+
+      // Axios error — specific message do
+      if (axios.isAxiosError(err)) {
+        if (err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT') {
+          res.status(504).json({
+            error:  'Humanization timed out',
+            detail: 'Rule engine processing took too long. Try again.',
+          });
+          return;
+        }
+        if (err.code === 'ECONNREFUSED') {
+          res.status(503).json({
+            error:  'AI Engine unavailable',
+            detail: 'AI Engine is not running.',
+          });
+          return;
+        }
+        const detail = err.response?.data?.detail
+          || err.response?.data?.error
+          || err.message;
+        res.status(err.response?.status || 500).json({
+          error:  'AI humanization failed',
+          detail: String(detail).slice(0, 300),
+        });
+        return;
+      }
+
+      res.status(500).json({
+        error:  'Failed to rehumanize content',
+        detail: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
   }
-});
+);
 
 // PATCH /api/content/:id/status
 contentRouter.patch('/:id/status', async (req: AuthenticatedRequest, res: Response): Promise<void> => {

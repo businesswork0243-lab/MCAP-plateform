@@ -1,4 +1,3 @@
-// apps/web/src/lib/api.ts
 'use client';
 
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
@@ -17,25 +16,33 @@ function ensureApiPath(url: string): string {
 const API_BASE_URL = ensureApiPath(RAW_BASE);
 
 if (typeof window !== 'undefined') {
-  // eslint-disable-next-line no-console
   console.log('[API] Base URL:', API_BASE_URL);
 }
 
 // ─── Axios Instances ──────────────────────────────────────────────────────────
 
+// Standard API calls (30s)
 export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30_000,
   headers: { 'Content-Type': 'application/json' },
 });
 
+// ✅ AI operations — longer timeouts
 export const aiApi = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 180_000,
+  timeout: 240_000, // 4 min — rule engine ke saath kaafi hai
   headers: { 'Content-Type': 'application/json' },
 });
 
-// ─── Request Interceptor ──────────────────────────────────────────────────────
+// ✅ Content generation — longest timeout
+export const generationApi = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 360_000, // 6 min — full pipeline ke liye
+  headers: { 'Content-Type': 'application/json' },
+});
+
+// ─── Token Attach ─────────────────────────────────────────────────────────────
 
 const attachToken = (config: InternalAxiosRequestConfig) => {
   if (typeof window !== 'undefined') {
@@ -49,12 +56,13 @@ const attachToken = (config: InternalAxiosRequestConfig) => {
 
 api.interceptors.request.use(attachToken);
 aiApi.interceptors.request.use(attachToken);
+generationApi.interceptors.request.use(attachToken);
 
 // ─── Response Interceptor: Auto-refresh on 401 ───────────────────────────────
 
 interface QueueItem {
   resolve: (token: string) => void;
-  reject:  (err: unknown) => void;
+  reject:  (err: unknown)  => void;
 }
 
 let isRefreshing = false;
@@ -80,7 +88,6 @@ const refreshTokenCall = async (): Promise<string | null> => {
       { refreshToken },
       { headers: { 'Content-Type': 'application/json' } }
     );
-
     const newToken = data.accessToken || data.token;
     if (newToken) {
       localStorage.setItem('accessToken', newToken);
@@ -99,7 +106,10 @@ const handleUnauthorized = () => {
   if (typeof window === 'undefined') return;
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
-  const publicPaths = ['/login', '/register', '/', '/forgot-password', '/reset-password'];
+  const publicPaths = [
+    '/login', '/register', '/',
+    '/forgot-password', '/reset-password',
+  ];
   if (!publicPaths.some(p => window.location.pathname === p)) {
     window.location.href = '/login';
   }
@@ -113,9 +123,9 @@ const setupResponseInterceptor = (instance: typeof api) => {
         _retry?: boolean;
       };
 
-      if (!error.response) return Promise.reject(error);
-      if (error.response.status !== 401) return Promise.reject(error);
-      if (originalRequest._retry) return Promise.reject(error);
+      if (!error.response)                   return Promise.reject(error);
+      if (error.response.status !== 401)     return Promise.reject(error);
+      if (originalRequest._retry)            return Promise.reject(error);
 
       const url = originalRequest.url || '';
       if (
@@ -140,19 +150,16 @@ const setupResponseInterceptor = (instance: typeof api) => {
       }
 
       originalRequest._retry = true;
-      isRefreshing = true;
+      isRefreshing            = true;
 
       try {
         const newToken = await refreshTokenCall();
-
         if (!newToken) {
           processQueue(error, null);
           handleUnauthorized();
           return Promise.reject(error);
         }
-
         processQueue(null, newToken);
-
         if (originalRequest.headers) {
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
         }
@@ -170,5 +177,6 @@ const setupResponseInterceptor = (instance: typeof api) => {
 
 setupResponseInterceptor(api);
 setupResponseInterceptor(aiApi);
+setupResponseInterceptor(generationApi);
 
 export default api;
