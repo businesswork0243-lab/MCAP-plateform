@@ -207,6 +207,8 @@ NARRATIVE PERSPECTIVE: {perspective} — {perspective_voice}
 
 CALL TO ACTION: {cta}
 
+{brand_doc_block}
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WRITING STRUCTURE: {structure_name}
 {structure_purpose}
@@ -268,6 +270,7 @@ async def run(
     word_count:            int | None       = None,
     special_instructions:  str              = "",
     tonality_spectrum:     dict | None      = None,
+    brand_document_context: str             = "",  # ✅ ADDED THIS
 ) -> dict:
 
     if custom_structure_flow and len(custom_structure_flow) > 0:
@@ -297,6 +300,19 @@ async def run(
     emphasis = icp_emphasis or icp["emphasis"]
     avoid    = icp_avoid    or icp["avoid"]
 
+    # ── Brand Document Context Block ──
+    brand_doc_block = ""
+    if brand_document_context and brand_document_context.strip():
+        trimmed_docs = brand_document_context[:4000]
+        brand_doc_block = f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BRAND DOCUMENT GUIDELINES (Base Voice):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{trimmed_docs}
+
+Ensure the canonical draft fundamentally aligns with this brand's voice, 
+vocabulary, and strategic constraints from the very first draft.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+
     user_prompt = USER_TEMPLATE.format(
         topic=topic,
         objective=objective,
@@ -307,6 +323,7 @@ async def run(
         perspective=perspective,
         perspective_voice=pv,
         cta=cta or "No specific CTA required.",
+        brand_doc_block=brand_doc_block,  # ✅ ADDED THIS
         structure_name=structure_name,
         structure_purpose=structure_purpose,
         flow_steps=flow_text,

@@ -14,6 +14,36 @@ contentRouter.use(authenticate)
 contentRouter.use('/bulk', bulkRouter)
 export default contentRouter
 
+// ─── Shared Brand Fetch Helper ───────────────────────────────────────────────
+async function fetchBrandProfileWithDocs(brandProfileId: string | null) {
+  if (!brandProfileId) return null;
+
+  const brand = await queryOne<Record<string, unknown>>(
+    `SELECT * FROM brand_profiles WHERE id = $1`,
+    [brandProfileId]
+  );
+  if (!brand) return null;
+
+  const docs = await query<{ name: string; parsed_content: string }>(
+    `SELECT name, parsed_content FROM brand_documents
+     WHERE brand_profile_id = $1 AND parsing_status = 'done' AND parsed_content IS NOT NULL
+     ORDER BY created_at DESC LIMIT 5`,
+    [brandProfileId]
+  );
+
+  const documentContext = docs.length > 0
+    ? docs.map(d => `=== ${d.name} ===\n${d.parsed_content}`).join('\n\n').slice(0, 8000)
+    : '';
+
+  return {
+    ...brand,
+    document_context: documentContext,
+    doc_context: documentContext,
+    has_documents: docs.length > 0,
+    document_count: docs.length,
+  };
+}
+
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 const tonalitySchema = z.object({
@@ -105,7 +135,108 @@ async function buildAIPayload(
   data: z.infer<typeof createRequestSchema>,
   orgId: string
 ): Promise<Record<string, unknown>> {
-  // Fetch ICP data if selected
+
+  // ── Brand Profile Fetch ────────────────────────────────────────────────────
+  let brandData: Record<string, unknown> | null = null
+
+  if (data.brandProfileId) {
+    
+    // ✅ Step 1: Brand profile fetch karo
+    const brand = await queryOne<Record<string, unknown>>(
+      `SELECT * FROM brand_profiles 
+       WHERE id = $1 AND organization_id = $2`,
+      [data.brandProfileId, orgId]
+    )
+
+    if (brand) {
+      // ✅ Step 2: Documents separately fetch karo (FIXED query)
+      const brandDocs = await query<{
+        name: string
+        parsed_content: string
+        mime_type: string
+      }>(
+        `SELECT name, parsed_content, mime_type
+         FROM brand_documents
+         WHERE brand_profile_id = $1
+           AND parsing_status = 'done'
+           AND parsed_content IS NOT NULL
+           AND parsed_content != ''
+         ORDER BY created_at DESC
+         LIMIT 5`,
+        [data.brandProfileId]
+      )
+
+      // ✅ Step 3: Tone columns ko nested object mein convert karo
+      const toneSettings = {
+        formality:      brand.tone_formality      ?? 5,
+        technical:      brand.tone_technical      ?? 5,
+        confidence:     brand.tone_confidence     ?? 5,
+        emotion:        brand.tone_emotion        ?? 5,
+        humor:          brand.tone_humor          ?? 2,
+        storytelling:   brand.tone_storytelling   ?? 5,
+        persuasiveness: brand.tone_persuasiveness ?? 5,
+        assertiveness:  brand.tone_assertiveness  ?? 5,
+        enthusiasm:     brand.tone_enthusiasm     ?? 5,
+        empathy:        brand.tone_empathy        ?? 5,
+      }
+
+      // ✅ Step 4: Document content combine karo
+      let documentContext = ''
+      if (brandDocs.length > 0) {
+        documentContext = brandDocs
+          .map(d => `=== ${d.name} ===\n${d.parsed_content}`)
+          .join('\n\n')
+          .slice(0, 8000) // AI context limit
+
+        logger.info('Brand documents loaded for AI', {
+          brandId:     data.brandProfileId,
+          docCount:    brandDocs.length,
+          contextChars: documentContext.length,
+        })
+      } else {
+        logger.warn('No parsed brand documents found', {
+          brandId: data.brandProfileId,
+        })
+      }
+
+      // ✅ Step 5: JSON fields parse karo
+      const parseJsonField = (val: unknown): unknown[] => {
+        if (Array.isArray(val)) return val
+        if (typeof val === 'string') {
+          try { return JSON.parse(val) } catch { return [] }
+        }
+        return []
+      }
+
+      brandData = {
+        ...brand,
+        // ✅ Nested tone object (brand_optimizer expect karta hai)
+        tone_settings:    toneSettings,
+        tone:             toneSettings,
+
+        // ✅ Parsed JSON fields
+        preferred_terms:   parseJsonField(brand.preferred_terms),
+        banned_phrases:    parseJsonField(brand.banned_phrases),
+        key_messages:      parseJsonField(brand.key_messages),
+        value_propositions:parseJsonField(brand.value_propositions),
+        likes:             parseJsonField(brand.likes),
+        hates:             parseJsonField(brand.hates),
+        dislikes:          parseJsonField(brand.dislikes),
+        stands_for:        parseJsonField(brand.stands_for),
+        stands_against:    parseJsonField(brand.stands_against),
+        core_values:       parseJsonField(brand.core_values),
+        core_motivations:  parseJsonField(brand.core_motivations),
+
+        // ✅ Document context (CORRECT KEY NAME)
+        document_context:  documentContext,  // brand_optimizer.py expect karta hai yahi
+        doc_context:       documentContext,  // extra alias
+        has_documents:     brandDocs.length > 0,
+        document_count:    brandDocs.length,
+      }
+    }
+  }
+
+  // ── ICP Fetch ──────────────────────────────────────────────────────────────
   let icpData: Record<string, unknown> | null = null
   if (data.icpProfileId) {
     const icp = await queryOne(
@@ -115,22 +246,7 @@ async function buildAIPayload(
     if (icp) icpData = icp as Record<string, unknown>
   }
 
-  // Fetch brand profile if selected
-  let brandData: Record<string, unknown> | null = null
-  if (data.brandProfileId) {
-    const brand = await queryOne(
-      `SELECT bp.*,
-        (SELECT parsed_content FROM brand_documents 
-         WHERE brand_profile_id = bp.id AND parsing_status = 'done'
-         LIMIT 3) as doc_context
-       FROM brand_profiles bp
-       WHERE bp.id = $1 AND bp.organization_id = $2`,
-      [data.brandProfileId, orgId]
-    )
-    if (brand) brandData = brand as Record<string, unknown>
-  }
-
-  // Fetch custom writing structure
+  // ── Writing Structure ──────────────────────────────────────────────────────
   let structureFlow: string[] | null = null
   if (data.customStructureId) {
     const structure = await queryOne<{ structure_flow: string[] }>(
@@ -140,13 +256,14 @@ async function buildAIPayload(
     if (structure) structureFlow = structure.structure_flow
   }
 
-  // Build audience string from ICP or manual
   const audienceStr = icpData
-    ? `${(icpData.basic_characteristics as Record<string, string>)?.role || ''} in ${(icpData.basic_characteristics as Record<string, string>)?.industry || ''}`
+    ? `${(icpData.basic_characteristics as any)?.role || ''} in ${(icpData.basic_characteristics as any)?.industry || ''}`
     : data.audience || 'General Business'
 
   const icpDescription = icpData
-    ? `Challenges: ${JSON.stringify(icpData.current_challenges)}. Goals: ${JSON.stringify(icpData.goals)}. Frustrations: ${JSON.stringify(icpData.frustrations)}.`
+    ? `Challenges: ${JSON.stringify(icpData.current_challenges)}. ` +
+      `Goals: ${JSON.stringify(icpData.goals)}. ` +
+      `Frustrations: ${JSON.stringify(icpData.frustrations)}.`
     : data.audienceDescription || ''
 
   return {
@@ -157,8 +274,10 @@ async function buildAIPayload(
     icp_description:     icpDescription,
     perspective:         data.narrativePerspective || 'Founder',
     writing_structure:   data.writingStructure || 'thesis',
-    custom_structure_flow: structureFlow || 
-      (data.customStructureFlow ? data.customStructureFlow.split('\n').filter(Boolean) : null),
+    custom_structure_flow: structureFlow ||
+      (data.customStructureFlow
+        ? data.customStructureFlow.split('\n').filter(Boolean)
+        : null),
     cta:                 data.ctaType === 'custom' ? data.customCta : data.ctaType || '',
     targetPlatforms:     data.platforms,
     language:            data.language,
@@ -167,7 +286,7 @@ async function buildAIPayload(
     enableHumanization:  data.humanizationEnabled,
     humanizationIntensity: data.humanizationLevel,
     enableQA:            data.qaEnabled,
-    brandProfile:        brandData,
+    brandProfile:        brandData,  // ✅ Complete brand data with documents
     tonalitySpectrum:    data.tonalitySpectrum,
     wordCount:           data.wordCount,
     seoEnabled:          data.seoEnabled,
@@ -773,6 +892,9 @@ contentRouter.post('/:id/rehumanize', async (req: AuthenticatedRequest, res: Res
       return;
     }
 
+    // ✅ FIX: Fetch brand WITH documents before calling humanizer
+    const brandProfile = await fetchBrandProfileWithDocs(request.brand_profile_id as string | null);
+
     // Call AI Engine humanizer
     const aiUrl = process.env.AI_ENGINE_URL || 'http://localhost:8000';
     const response = await axios.post(
@@ -780,6 +902,7 @@ contentRouter.post('/:id/rehumanize', async (req: AuthenticatedRequest, res: Res
       {
         content: artifact.content,
         intensity: req.body.intensity || 'medium',
+        brandProfile: brandProfile, // ✅ ADDED BRAND DATA
       },
       { timeout: 60_000 }
     );
@@ -1291,12 +1414,10 @@ contentRouter.post(
         [artifact.content_request_id]
       );
 
+      // ✅ FIX: Use helper to fetch brand WITH documents
       let brandProfile: Record<string, unknown> | null = null;
       if (request?.brand_profile_id) {
-        brandProfile = await queryOne(
-          `SELECT * FROM brand_profiles WHERE id = $1`,
-          [request.brand_profile_id]
-        );
+        brandProfile = await fetchBrandProfileWithDocs(request.brand_profile_id);
       }
 
       // Call AI Engine Refiner

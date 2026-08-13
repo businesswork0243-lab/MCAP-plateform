@@ -164,6 +164,7 @@ class BrandProfile(BaseModel):
     name:              str       = ""
     mission_statement: str       = ""
     missionStatement:  str       = ""
+    mission:           str       = ""
     tone_settings:     dict      = Field(default_factory=dict)
     tone:              dict      = Field(default_factory=dict)
     preferred_terms:   list[str] = Field(default_factory=list)
@@ -179,11 +180,38 @@ class BrandProfile(BaseModel):
     life_purpose:      str       = ""
     likes:             list[str] = Field(default_factory=list)
     hates:             list[str] = Field(default_factory=list)
+    dislikes:          list[str] = Field(default_factory=list)
     core_motivations:  list[str] = Field(default_factory=list)
 
+    # ── Brand Document Fields (Critical for Audit) ─────────────────────
+    document_context:  str       = ""
+    doc_context:       str       = ""
+    has_documents:     bool      = False
+    document_count:    int       = 0
+
     def as_dict(self) -> dict:
+        """Convert to dict while preserving document context."""
         d = self.model_dump()
+
+        # Normalize tone
         d["tone_settings"] = self.tone_settings or self.tone
+
+        # Normalize mission field aliases
+        if not d.get("mission_statement"):
+            d["mission_statement"] = (
+                self.mission_statement
+                or self.missionStatement
+                or self.mission
+                or ""
+            )
+
+        # Normalize document context (most important)
+        doc_ctx = self.document_context or self.doc_context or ""
+        d["document_context"] = doc_ctx
+        d["doc_context"] = doc_ctx
+        d["has_documents"] = bool(doc_ctx.strip())
+        d["document_count"] = 1 if doc_ctx.strip() else 0
+
         return d
 
 
@@ -560,6 +588,17 @@ async def run_full_pipeline(req: FullPipelineRequest):
         )
 
         profile_dict = req.brandProfile.as_dict() if req.brandProfile else None
+
+        # ── Brand Document Audit Log (Priority 1) ─────────────────────
+        if profile_dict:
+            log.info(
+                "Brand profile received | name=%s | has_documents=%s | "
+                "document_count=%s | context_chars=%d",
+                profile_dict.get("name", "Unknown"),
+                profile_dict.get("has_documents", False),
+                profile_dict.get("document_count", 0),
+                len(profile_dict.get("document_context", "") or ""),
+            )
         total_tokens = 0
 
         # ── Agent 1: Canonical Writer ─────────────────────────────────────
@@ -582,6 +621,7 @@ async def run_full_pipeline(req: FullPipelineRequest):
                 word_count=ci.get("word_count"),
                 special_instructions=ci.get("special_instructions", ""),
                 tonality_spectrum=ci.get("tonality_spectrum") or {},
+                brand_document_context=ci.get("brand_document_context", ""), # ✅ ADDED THIS
             )
         except Exception as e:
             log.error("Canonical writer FAILED: %s\n%s", e, traceback.format_exc())

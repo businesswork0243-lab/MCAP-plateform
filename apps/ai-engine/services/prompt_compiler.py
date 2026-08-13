@@ -231,6 +231,8 @@ def compile(req: PDLRequest) -> CompiledPromptPackage:
         "word_count":          req.word_count,
         "seo_enabled":         req.seo_enabled,
         "seo_settings":        req.seo_settings,
+        # ✅ NEW: Brand document context canonical writer ko bhi milna chahiye
+        "brand_document_context": brand.get("document_context") or "",
     }
 
     # ── Platform instructions ────────────────────────────────────────────────
@@ -249,7 +251,7 @@ def compile(req: PDLRequest) -> CompiledPromptPackage:
     # ── Brand instructions ───────────────────────────────────────────────────
     brand_instructions = {
         "brand_name":       brand_name,
-        "mission":          brand.get("mission_statement") or brand.get("missionStatement") or "",
+        "mission":          brand.get("mission_statement") or brand.get("missionStatement") or brand.get("mission") or "",
         "life_purpose":     life_purpose,
         "tone_settings":    tone_settings,
         "banned_phrases":   banned_phrases,
@@ -264,6 +266,9 @@ def compile(req: PDLRequest) -> CompiledPromptPackage:
         "stands_against":   stands_against,
         "core_values":      core_values,
         "core_motivations": core_motivations,
+        # ✅ NEW: Document context pass karo
+        "document_context": brand.get("document_context") or brand.get("doc_context") or "",
+        "has_documents":    brand.get("has_documents", False),
     }
 
     # ── Humanization instructions ────────────────────────────────────────────

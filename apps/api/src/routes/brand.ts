@@ -3,6 +3,8 @@ import { Router, Response } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { z } from 'zod'
 import multer from 'multer'
+import pdfParse = require('pdf-parse')
+import mammoth from 'mammoth'
 import { query, queryOne, withTransaction } from '../db/connection'
 import { AuthenticatedRequest, authenticate } from '../middleware/auth'
 import { logger } from '../lib/logger'
@@ -39,79 +41,79 @@ const upload = multer({
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 const toneSchema = z.object({
-  formality:      z.number().min(1).max(10).default(5),
-  technical:      z.number().min(1).max(10).default(5),
-  confidence:     z.number().min(1).max(10).default(5),
-  emotion:        z.number().min(1).max(10).default(5),
-  humor:          z.number().min(1).max(10).default(2),
-  storytelling:   z.number().min(1).max(10).default(5),
+  formality: z.number().min(1).max(10).default(5),
+  technical: z.number().min(1).max(10).default(5),
+  confidence: z.number().min(1).max(10).default(5),
+  emotion: z.number().min(1).max(10).default(5),
+  humor: z.number().min(1).max(10).default(2),
+  storytelling: z.number().min(1).max(10).default(5),
   persuasiveness: z.number().min(1).max(10).default(5),
-  assertiveness:  z.number().min(1).max(10).default(5),
-  enthusiasm:     z.number().min(1).max(10).default(5),
-  empathy:        z.number().min(1).max(10).default(5),
+  assertiveness: z.number().min(1).max(10).default(5),
+  enthusiasm: z.number().min(1).max(10).default(5),
+  empathy: z.number().min(1).max(10).default(5),
 }).optional()
 
 const brandSchema = z.object({
   // Core
-  name:             z.string().min(1).max(255),
-  website:          z.string().url().optional().or(z.literal('')),
-  industry:         z.string().max(100).optional(),
-  description:      z.string().optional(),
-  mission:          z.string().optional(),
-  vision:           z.string().optional(),
-  positioning:      z.string().optional(),
-  life_purpose:     z.string().optional(),
+  name: z.string().min(1).max(255),
+  website: z.string().url().optional().or(z.literal('')),
+  industry: z.string().max(100).optional(),
+  description: z.string().optional(),
+  mission: z.string().optional(),
+  vision: z.string().optional(),
+  positioning: z.string().optional(),
+  life_purpose: z.string().optional(),
 
   // Tone
   tone: toneSchema,
 
   // Vocabulary
-  preferredTerms:     z.array(z.string()).default([]),
-  bannedPhrases:      z.array(z.string()).default([]),
+  preferredTerms: z.array(z.string()).default([]),
+  bannedPhrases: z.array(z.string()).default([]),
   industryVocabulary: z.array(z.string()).default([]),
-  keyMessages:        z.array(z.string()).default([]),
-  valuePropositions:  z.array(z.string()).default([]),
-  complianceNotes:    z.string().optional(),
+  keyMessages: z.array(z.string()).default([]),
+  valuePropositions: z.array(z.string()).default([]),
+  complianceNotes: z.string().optional(),
 
   // Values & Beliefs (NEW)
-  likes:            z.array(z.string()).default([]),
-  hates:            z.array(z.string()).default([]),
-  dislikes:         z.array(z.string()).default([]),
-  stands_for:       z.array(z.string()).default([]),
-  stands_against:   z.array(z.string()).default([]),
+  likes: z.array(z.string()).default([]),
+  hates: z.array(z.string()).default([]),
+  dislikes: z.array(z.string()).default([]),
+  stands_for: z.array(z.string()).default([]),
+  stands_against: z.array(z.string()).default([]),
   core_motivations: z.array(z.string()).default([]),
-  core_values:      z.array(z.string()).default([]),
+  core_values: z.array(z.string()).default([]),
 
   // Meta
-  isDefault:  z.boolean().default(false),
-  client_id:  z.string().uuid().optional(),
+  isDefault: z.boolean().default(false),
+  client_id: z.string().uuid().optional(),
 })
 
 const icpSchema = z.object({
-  name:                   z.string().min(1).max(255),
-  brand_profile_id:       z.string().uuid().optional(),
-  basic_characteristics:  z.record(z.string()).default({}),
-  interests:              z.array(z.string()).default([]),
-  information_sources:    z.array(z.string()).default([]),
-  lifestyle_hobbies:      z.string().optional(),
-  current_challenges:     z.array(z.string()).default([]),
-  previous_solutions:     z.array(z.string()).default([]),
-  goals:                  z.array(z.string()).default([]),
-  emotional_motivations:  z.array(z.string()).default([]),
-  frustrations:           z.array(z.string()).default([]),
-  personality_scores:     z.record(z.number()).default({}),
-  need_hierarchy:         z.record(z.unknown()).default({}),
-  time_expectations:      z.record(z.unknown()).default({}),
-  success_criteria:       z.array(z.string()).default([]),
-  positioning_strategy:   z.string().optional(),
-  roi_expectations:       z.record(z.unknown()).default({}),
-  risk_perception:        z.string().optional(),
-  non_ideal_notes:        z.string().optional(),
+  name: z.string().min(1).max(255),
+  brand_profile_id: z.string().uuid().optional(),
+  basic_characteristics: z.record(z.string()).default({}),
+  interests: z.array(z.string()).default([]),
+  information_sources: z.array(z.string()).default([]),
+  lifestyle_hobbies: z.string().optional(),
+  current_challenges: z.array(z.string()).default([]),
+  previous_solutions: z.array(z.string()).default([]),
+  goals: z.array(z.string()).default([]),
+  emotional_motivations: z.array(z.string()).default([]),
+  frustrations: z.array(z.string()).default([]),
+  personality_scores: z.record(z.number()).default({}),
+  need_hierarchy: z.record(z.unknown()).default({}),
+  time_expectations: z.record(z.unknown()).default({}),
+  success_criteria: z.array(z.string()).default([]),
+  positioning_strategy: z.string().optional(),
+  roi_expectations: z.record(z.unknown()).default({}),
+  risk_perception: z.string().optional(),
+  non_ideal_notes: z.string().optional(),
 })
 
 const writingStructureSchema = z.object({
-  name:           z.string().min(1).max(255),
-  description:    z.string().optional(),
+  name: z.string().min(1).max(255),
+  description: z.string().optional(),
   structure_flow: z.array(z.string()).min(1),
 })
 
@@ -123,16 +125,16 @@ function buildToneFields(tone: Record<string, number> | undefined): {
 } {
   if (!tone) return { fields: [], values: [] }
   const map: Record<string, string> = {
-    formality:      'tone_formality',
-    technical:      'tone_technical',
-    confidence:     'tone_confidence',
-    emotion:        'tone_emotion',
-    humor:          'tone_humor',
-    storytelling:   'tone_storytelling',
+    formality: 'tone_formality',
+    technical: 'tone_technical',
+    confidence: 'tone_confidence',
+    emotion: 'tone_emotion',
+    humor: 'tone_humor',
+    storytelling: 'tone_storytelling',
     persuasiveness: 'tone_persuasiveness',
-    assertiveness:  'tone_assertiveness',
-    enthusiasm:     'tone_enthusiasm',
-    empathy:        'tone_empathy',
+    assertiveness: 'tone_assertiveness',
+    enthusiasm: 'tone_enthusiasm',
+    empathy: 'tone_empathy',
   }
   const fields: string[] = []
   const values: unknown[] = []
@@ -390,6 +392,142 @@ brandRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Pro
   }
 })
 
+// ─── Document Text Extractor ──────────────────────────────────────────────────
+
+async function extractTextFromBuffer(
+  buffer: Buffer,
+  mimeType: string,
+  fileName: string
+): Promise<{ text: string; method: string }> {
+
+  try {
+    // PDF
+    if (mimeType === 'application/pdf') {
+      const data = await (pdfParse as any)(buffer)
+      return {
+        text: data.text.trim(),
+        method: 'pdf-parse',
+      }
+    }
+
+    // DOCX
+    if (
+      mimeType === 'application/vnd.openxmlformats-officedocument' +
+      '.wordprocessingml.document'
+    ) {
+      const result = await mammoth.extractRawText({ buffer })
+      return {
+        text: result.value.trim(),
+        method: 'mammoth',
+      }
+    }
+
+    // Plain text
+    if (mimeType === 'text/plain') {
+      return {
+        text: buffer.toString('utf-8').trim(),
+        method: 'text',
+      }
+    }
+
+    // Image — skip text extraction
+    if (mimeType.startsWith('image/')) {
+      return {
+        text: `[Image file: ${fileName} — visual reference only]`,
+        method: 'image-skip',
+      }
+    }
+
+    // DOC (old format)
+    if (mimeType === 'application/msword') {
+      return {
+        text: buffer.toString('utf-8').replace(/[^\x20-\x7E\n]/g, ' ').trim(),
+        method: 'doc-fallback',
+      }
+    }
+
+    return { text: '', method: 'unsupported' }
+
+  } catch (parseErr) {
+    logger.warn('Text extraction failed', {
+      mimeType,
+      fileName,
+      error: parseErr instanceof Error ? parseErr.message : parseErr,
+    })
+    return { text: '', method: 'failed' }
+  }
+}
+
+// ─── Smart Text Chunker for Large Documents ───────────────────────────────────
+
+function smartChunkText(text: string, maxChars = 8000): string {
+  if (text.length <= maxChars) return text
+
+  // Important sections pehle rakhein
+  const importantKeywords = [
+    'tone of voice', 'brand voice', 'writing style',
+    'do not', "don't", 'avoid', 'never use',
+    'always use', 'preferred', 'banned', 'guidelines',
+    'mission', 'vision', 'values', 'personality',
+    'messaging', 'key messages', 'brand personality',
+  ]
+
+  const lines = text.split('\n')
+  const important: string[] = []
+  const normal: string[] = []
+
+  for (const line of lines) {
+    const lower = line.toLowerCase()
+    const isImportant = importantKeywords.some(kw => lower.includes(kw))
+    if (isImportant) {
+      important.push(line)
+    } else {
+      normal.push(line)
+    }
+  }
+
+  // Important lines pehle, phir baaki content
+  const combined = [...important, ...normal].join('\n')
+  return combined.slice(0, maxChars) +
+    (combined.length > maxChars ? '\n... [document truncated]' : '')
+}
+
+// ─── Brand Document Summary Refresh ──────────────────────────────────────────
+
+async function refreshBrandDocumentSummary(brandProfileId: string): Promise<void> {
+  try {
+    const docs = await query<{ parsed_content: string; name: string }>(
+      `SELECT name, parsed_content 
+       FROM brand_documents 
+       WHERE brand_profile_id = $1 
+         AND parsing_status = 'done'
+         AND parsed_content IS NOT NULL
+       ORDER BY created_at DESC
+       LIMIT 5`,
+      [brandProfileId]
+    )
+
+    if (docs.length === 0) return
+
+    // Combine karo saare docs ka content (with labels)
+    const combined = docs
+      .map(d => `=== Document: ${d.name} ===\n${d.parsed_content}`)
+      .join('\n\n')
+
+    // Max 10000 chars (multiple docs ho sakte hain)
+    const summary = combined.slice(0, 10000)
+
+    logger.info('Brand document summary updated', {
+      brandProfileId,
+      docCount: docs.length,
+      summaryLength: summary.length,
+    })
+
+  } catch (err) {
+    logger.warn('Failed to refresh brand summary', { error: err })
+  }
+}
+
 // ─── DOCUMENT ROUTES ──────────────────────────────────────────────────────────
 
 // POST /api/brand/:id/documents
@@ -398,12 +536,14 @@ brandRouter.post(
   upload.array('files', 10),
   async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      // Verify brand profile ownership
       const profile = await queryOne(
         'SELECT id FROM brand_profiles WHERE id = $1 AND organization_id = $2',
         [req.params.id, req.user!.organizationId]
       )
-      if (!profile) { res.status(404).json({ error: 'Brand profile not found' }); return }
+      if (!profile) {
+        res.status(404).json({ error: 'Brand profile not found' })
+        return
+      }
 
       const files = req.files as Express.Multer.File[]
       if (!files || files.length === 0) {
@@ -416,43 +556,70 @@ brandRouter.post(
       for (const file of files) {
         const docId = uuidv4()
 
-        // TODO: Upload to cloud storage (S3/Cloudinary/Render Disk)
-        // For now, store as base64 or use local path
-        // const fileUrl = await uploadToStorage(file)
+        // ✅ Step 1: Text extract karo immediately (buffer available hai)
+        logger.info('Extracting text from document', {
+          name: file.originalname,
+          mime: file.mimetype,
+          size: file.size,
+        })
 
-        // Placeholder — replace with actual storage
-        const fileUrl = `https://storage.example.com/brand-docs/${docId}/${file.originalname}`
+        const { text: rawText, method } = await extractTextFromBuffer(
+          file.buffer,
+          file.mimetype,
+          file.originalname
+        )
 
+        // ✅ Step 2: Smart chunk for AI context
+        const parsedContent = rawText ? smartChunkText(rawText) : null
+        const parsingStatus = parsedContent ? 'done' :
+          method === 'image-skip' ? 'done' : 'failed'
+
+        logger.info('Document parsed', {
+          docId,
+          method,
+          rawLength: rawText.length,
+          parsedLength: parsedContent?.length ?? 0,
+          status: parsingStatus,
+        })
+
+        // ✅ Step 3: DB mein save karo WITH parsed content
         await query(
           `INSERT INTO brand_documents
-            (id, brand_profile_id, organization_id, uploaded_by, name, file_url, file_size, mime_type, parsing_status)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending')`,
+            (id, brand_profile_id, organization_id, uploaded_by,
+             name, file_url, file_size, mime_type,
+             parsed_content, parsing_status)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
             docId,
             req.params.id,
             req.user!.organizationId,
             req.user!.id,
             file.originalname,
-            fileUrl,
+            `local://${docId}/${file.originalname}`, // placeholder URL
             file.size,
             file.mimetype,
+            parsedContent,                            // ✅ actual text
+            parsingStatus,                            // ✅ 'done' ya 'failed'
           ]
         )
-
-        // TODO: Queue document parsing job
-        // await addDocumentParsingJob(docId, file.buffer, file.mimetype)
 
         savedDocs.push({
           id: docId,
           name: file.originalname,
           size: file.size,
           type: file.mimetype,
-          url: fileUrl,
-          status: 'done', // Change to 'pending' when parsing queue is ready
+          status: parsingStatus,                // ✅ real status
+          parsedChars: parsedContent?.length ?? 0,
+          extractMethod: method,
         })
       }
 
+      // ✅ Step 4: Brand profile ka summary update karo
+      // Aggregate karo saare documents ka parsed content
+      await refreshBrandDocumentSummary(req.params.id)
+
       res.status(201).json({ documents: savedDocs })
+
     } catch (err) {
       logger.error('POST /brand/:id/documents error:', { error: err })
       res.status(500).json({ error: 'Failed to upload documents' })

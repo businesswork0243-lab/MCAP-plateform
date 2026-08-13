@@ -288,6 +288,93 @@ function emitProgress(
   }
 }
 
+async function fetchBrandWithDocuments(
+  brandProfileId: string | null | undefined
+): Promise<Record<string, unknown> | null> {
+  if (!brandProfileId) return null
+
+  try {
+    // Brand profile fetch
+    const rows = await query(
+      'SELECT * FROM brand_profiles WHERE id = $1',
+      [brandProfileId]
+    )
+    const brand = rows[0]
+    if (!brand) return null
+
+    // Documents fetch
+    const docs = await query<{
+      name: string
+      parsed_content: string
+    }>(
+      `SELECT name, parsed_content
+       FROM brand_documents
+       WHERE brand_profile_id = $1
+         AND parsing_status = 'done'
+         AND parsed_content IS NOT NULL
+       ORDER BY created_at DESC
+       LIMIT 5`,
+      [brandProfileId]
+    )
+
+    const documentContext = docs.length > 0
+      ? docs.map(d => `=== ${d.name} ===\n${d.parsed_content}`)
+             .join('\n\n')
+             .slice(0, 8000)
+      : ''
+
+    // Helper
+    const parseJson = (val: unknown): unknown[] => {
+      if (Array.isArray(val)) return val
+      if (typeof val === 'string') {
+        try { return JSON.parse(val) } catch { return [] }
+      }
+      return []
+    }
+
+    logger.info('Brand refetched in worker', {
+      brandId:      brandProfileId,
+      docCount:     docs.length,
+      contextChars: documentContext.length,
+    })
+
+    return {
+      ...brand,
+      tone_settings: {
+        formality:      brand.tone_formality      ?? 5,
+        technical:      brand.tone_technical      ?? 5,
+        confidence:     brand.tone_confidence     ?? 5,
+        emotion:        brand.tone_emotion        ?? 5,
+        humor:          brand.tone_humor          ?? 2,
+        storytelling:   brand.tone_storytelling   ?? 5,
+        persuasiveness: brand.tone_persuasiveness ?? 5,
+        assertiveness:  brand.tone_assertiveness  ?? 5,
+        enthusiasm:     brand.tone_enthusiasm     ?? 5,
+        empathy:        brand.tone_empathy        ?? 5,
+      },
+      preferred_terms:  parseJson(brand.preferred_terms),
+      banned_phrases:   parseJson(brand.banned_phrases),
+      key_messages:     parseJson(brand.key_messages),
+      likes:            parseJson(brand.likes),
+      hates:            parseJson(brand.hates),
+      stands_for:        parseJson(brand.stands_for),
+      stands_against:   parseJson(brand.stands_against),
+      core_values:      parseJson(brand.core_values),
+      core_motivations: parseJson(brand.core_motivations),
+      document_context: documentContext,
+      has_documents:    docs.length > 0,
+      document_count:   docs.length,
+    }
+
+  } catch (err) {
+    logger.error('Brand refetch failed in worker', {
+      brandProfileId,
+      error: err instanceof Error ? err.message : err,
+    })
+    return null
+  }
+}
+
 // ── Main Job Processor ────────────────────────────────────────────────────────
 
 async function processContentJob(job: Job<ContentJobData>): Promise<void> {
@@ -320,6 +407,22 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
 
     // ── Step 2: Fetching context ────────────────────────────────
     emitProgress(organizationId, requestId, PROGRESS.FETCHING_BRAND, 'fetching_brand_context');
+
+    // ✅ Worker level pe fresh brand data fetch karo
+    const freshBrandProfile = await fetchBrandWithDocuments(
+      job.data.brandProfileId
+    )
+
+    if (freshBrandProfile) {
+      logger.info('Fresh brand loaded in worker', {
+        requestId,
+        brandName:    freshBrandProfile.name,
+        hasDocs:      freshBrandProfile.has_documents,
+        docCount:     freshBrandProfile.document_count,
+        contextChars: (freshBrandProfile.document_context as string)?.length ?? 0,
+      })
+    }
+
     await new Promise(r => setTimeout(r, 300)); // Small UI feedback delay
 
     // ── Step 3: Start pipeline ──────────────────────────────────
@@ -362,7 +465,10 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
 
     let result: PipelineResponse;
     try {
-      result = await callFullPipeline(job.data);
+      result = await callFullPipeline({
+        ...job.data,
+        brandProfile: (freshBrandProfile || job.data.brandProfile) as any,  // Override with fresh data
+      });
     } finally {
       clearInterval(heartbeat);
     }
