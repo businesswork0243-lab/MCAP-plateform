@@ -567,62 +567,71 @@ async def run(
     except Exception as e:
         log.warning("Second pass failed, using first pass result: %s", e)
 
-    # ── Rule Engine (isolated failure) ────────────────────────────────────────
+    # ── Rule Engine (isolated failure + skip flag) ──────────────────────────
     rule_engine_meta: dict = {"enabled": False}
 
-    try:
-        req_id = request_id or str(uuid.uuid4())
-        engine = _get_rule_engine()
-        safe_brand_data = brand_data or {}
+    # ✅ Check if rule engine should be skipped (for fast rehumanize)
+    skip_rule_engine = bool(
+        (extra_context or {}).get("skip_rule_engine", False)
+    )
 
-        re_result = await engine.process(
-            content=humanized,
-            user_prompt=user_prompt or content[:200],
-            brand_data=safe_brand_data,
-            extra_context=extra_context,
-            request_id=req_id,
-        )
+    if skip_rule_engine:
+        log.info("Rule Engine SKIPPED (fast mode requested)")
+        rule_engine_meta = {"enabled": False, "reason": "skipped_by_request"}
+    else:
+        try:
+            req_id = request_id or str(uuid.uuid4())
+            engine = _get_rule_engine()
+            safe_brand_data = brand_data or {}
 
-        # Only use Rule Engine output if it succeeded
-        if re_result and hasattr(re_result, 'final_content') and re_result.final_content:
-            humanized = re_result.final_content
-
-            static_val         = re_result.static_validation
-            static_score       = static_val.static_score  if static_val else 0.0
-            dynamic_score      = static_val.dynamic_score if static_val else 0.0
-            passed             = static_val.passed        if static_val else False
-            violations_count   = len(static_val.violations)      if static_val else 0
-            category_breakdown = static_val.category_breakdown if static_val else {}
-
-            rule_engine_meta = {
-                "enabled":                    True,
-                "final_score":                re_result.final_score,
-                "static_score":               static_score,
-                "dynamic_score":              dynamic_score,
-                "passed":                     passed,
-                "total_iterations":           re_result.total_iterations,
-                "false_negatives_eliminated": re_result.false_negatives_eliminated,
-                "dynamic_rules_generated":    len(re_result.dynamic_rules.rules),
-                "violations_remaining":       violations_count,
-                "category_breakdown":         category_breakdown,
-                "improvement_log":            re_result.improvement_log,
-                "processing_ms":              re_result.processing_time_ms,
-            }
-
-            log.info(
-                "Rule Engine complete | score=%.1f%% | passed=%s | iterations=%d",
-                re_result.final_score, passed, re_result.total_iterations,
+            re_result = await engine.process(
+                content=humanized,
+                user_prompt=user_prompt or content[:200],
+                brand_data=safe_brand_data,
+                extra_context=extra_context,
+                request_id=req_id,
             )
-        else:
-            log.warning("Rule Engine returned empty result — skipping")
-            rule_engine_meta = {"enabled": True, "skipped": "empty_result"}
 
-    except Exception as e:
-        log.error("Rule Engine FAILED (non-fatal): %s\n%s", e, _tb.format_exc())
-        rule_engine_meta = {
-            "enabled": True,
-            "error": f"{type(e).__name__}: {str(e)[:200]}",
-        }
+            # Only use Rule Engine output if it succeeded
+            if re_result and hasattr(re_result, 'final_content') and re_result.final_content:
+                humanized = re_result.final_content
+
+                static_val         = re_result.static_validation
+                static_score       = static_val.static_score  if static_val else 0.0
+                dynamic_score      = static_val.dynamic_score if static_val else 0.0
+                passed             = static_val.passed        if static_val else False
+                violations_count   = len(static_val.violations)      if static_val else 0
+                category_breakdown = static_val.category_breakdown if static_val else {}
+
+                rule_engine_meta = {
+                    "enabled":                    True,
+                    "final_score":                re_result.final_score,
+                    "static_score":               static_score,
+                    "dynamic_score":              dynamic_score,
+                    "passed":                     passed,
+                    "total_iterations":           re_result.total_iterations,
+                    "false_negatives_eliminated": re_result.false_negatives_eliminated,
+                    "dynamic_rules_generated":    len(re_result.dynamic_rules.rules),
+                    "violations_remaining":       violations_count,
+                    "category_breakdown":         category_breakdown,
+                    "improvement_log":            re_result.improvement_log,
+                    "processing_ms":              re_result.processing_time_ms,
+                }
+
+                log.info(
+                    "Rule Engine complete | score=%.1f%% | passed=%s | iterations=%d",
+                    re_result.final_score, passed, re_result.total_iterations,
+                )
+            else:
+                log.warning("Rule Engine returned empty result — skipping")
+                rule_engine_meta = {"enabled": True, "skipped": "empty_result"}
+
+        except Exception as e:
+            log.error("Rule Engine FAILED (non-fatal): %s\n%s", e, _tb.format_exc())
+            rule_engine_meta = {
+                "enabled": True,
+                "error": f"{type(e).__name__}: {str(e)[:200]}",
+            }
 
     # ── Final metrics (safe) ──────────────────────────────────────────────────
     try:

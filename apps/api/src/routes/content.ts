@@ -895,18 +895,6 @@ contentRouter.post('/:id/rehumanize', async (req: AuthenticatedRequest, res: Res
     // ✅ FIX: Fetch brand WITH documents before calling humanizer
     const brandProfile = await fetchBrandProfileWithDocs(request.brand_profile_id as string | null);
 
-    // Call AI Engine humanizer
-    const aiUrl = process.env.AI_ENGINE_URL || 'http://localhost:8000';
-    const response = await axios.post(
-      `${aiUrl}/agents/humanizer`,
-      {
-        content: artifact.content,
-        intensity: req.body.intensity || 'medium',
-        brandProfile: brandProfile, // ✅ ADDED BRAND DATA
-      },
-      { timeout: 60_000 }
-    );
-
     // Determine platform
     let platform = 'canonical';
     if (artifact.metadata) {
@@ -917,6 +905,45 @@ contentRouter.post('/:id/rehumanize', async (req: AuthenticatedRequest, res: Res
         if (meta?.platform) platform = meta.platform;
       } catch {}
     }
+
+    // Call AI Engine humanizer
+    const aiUrl = process.env.AI_ENGINE_URL || 'http://localhost:8000';
+
+    // ✅ Deep mode flag (default: false = fast)
+    const deepMode = req.body.deepMode === true;
+    const intensity = req.body.intensity || 'medium';
+
+    logger.info('Calling rehumanizer', {
+      requestId: req.params.id,
+      contentChars: artifact.content.length,
+      platform,
+      hasBrand: !!brandProfile,
+      deepMode,
+      intensity,
+    });
+
+    // ✅ Timeout based on mode
+    const timeoutMs = deepMode ? 240_000 : 90_000;  // 4min or 90s
+
+    const response = await axios.post(
+      `${aiUrl}/agents/humanizer`,
+      {
+        content: artifact.content,
+        intensity,
+        brandProfile: brandProfile,
+        extraContext: {
+          platform,
+          content_type: 'article',
+          skip_rule_engine: !deepMode,  // ✅ Fast mode skips rule engine
+        },
+        requestId: req.params.id,
+      },
+      { 
+        timeout: timeoutMs,
+        maxContentLength: 50 * 1024 * 1024,
+        maxBodyLength: 50 * 1024 * 1024,
+      }
+    );
 
     // Save new artifact
     const newArtifactId = uuidv4();
