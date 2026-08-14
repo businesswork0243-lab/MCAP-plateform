@@ -120,6 +120,7 @@ def _build_user_prompt(
     brand_phrases: list | None,
     pre_issues:    dict,
 ) -> str:
+
     config = INTENSITY_CONFIG.get(intensity, INTENSITY_CONFIG["medium"])
 
     # Pre-scan warnings
@@ -139,7 +140,7 @@ def _build_user_prompt(
     warning_block = (
         "\n".join(warnings)
         if warnings
-        else "✅ No major issues — focus on voice naturalness"
+        else "✅ No major issues detected"
     )
 
     # Banned phrases
@@ -165,19 +166,44 @@ def _build_user_prompt(
 
     lang_note = LANGUAGE_RULES.get(language, f"Language: {language}")
 
+    # ✅ Content word count — LLM ko pata chale kitna bada hai
+    word_count = len(content.split())
+
     return f"""INTENSITY: {intensity.upper()} — {config['instruction']}
 
 {warning_block}
 
 LANGUAGE: {lang_note}
 
-{tonality_block}BANNED PHRASES (eliminate every instance):
+{tonality_block}BANNED PHRASES (eliminate every instance found):
 {banned_block}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  MANDATORY CHANGE REQUIREMENTS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+You MUST make VISIBLE changes to this content. 
+DO NOT return the same text. This is not optional.
+
+REQUIRED changes (make ALL of these):
+1. Replace at least 3 banned phrases with natural alternatives
+2. Rewrite the opening sentence completely
+3. Vary sentence lengths — break long sentences, combine short ones
+4. Replace at least 2 generic adjectives with specific concrete ones
+5. Convert any passive voice to active voice in at least 2 places
+6. If any sentence starts with same word as previous — change it
+
+PROOF OF WORK: Your output MUST be meaningfully different from input.
+If input has {word_count} words, output should have {word_count - 20} 
+to {word_count + 30} words (not exactly same count).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 CONTENT TO HUMANIZE:
 {content}
 
-Apply all three tasks simultaneously in one pass. Output only the humanized content:"""
+Apply ALL three tasks + mandatory changes simultaneously.
+Output ONLY the humanized content — no labels, no commentary:"""
 
 
 # ── Main Entry Point ──────────────────────────────────────────────────────────

@@ -44,18 +44,24 @@ interface ContentRequest {
 }
 
 interface VersionRecord {
-  id: string;
+  id:             string;
   version_number: number;
-  platform?: string;
-  content: string;
-  change_type: 'generated' | 'edited' | 'refined' | 'regenerated' | 'humanized';
+  platform?:      string;
+  content:        string;
+  change_type:    'generated' | 'edited' | 'refined' | 'regenerated' | 'humanized' | 'restored';
   change_summary?: string;
-  user_prompt?: string;
-  quick_tags?: string[] | string;
-  tokens_used?: number;
-  char_diff?: number;
-  created_at: string;
-  created_by_name?: string;
+  user_prompt?:   string;
+  quick_tags?:    string[] | string;
+  tokens_used?:   number;
+  char_diff?:     number;
+  diff_data?:     {
+    added:         string[];
+    removed:       string[];
+    summary:       string;
+    changePercent: number;
+  };
+  created_at:     string;
+  created_by_name?:  string;
   created_by_email?: string;
 }
 
@@ -180,6 +186,11 @@ export default function ContentWorkspacePage() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [lastDiff, setLastDiff] = useState<{
+    summary:       string;
+    changePercent: number;
+    identical:     boolean;
+  } | null>(null);
 
   // ── Fetch Content Request Data ────────────────────────────────────────────
   const { data, isLoading, error } = useQuery({
@@ -292,9 +303,12 @@ export default function ContentWorkspacePage() {
       aiApi.post(`/content/${id}/rehumanize`, {
         intensity: 'medium',
       }),
-    onSuccess: (response: any) => {
+    onSuccess: async (response: any) => {
+      const diff = response.data?.diff;
+      if (diff) setLastDiff(diff);
+
       // Content refresh karo
-      queryClient.invalidateQueries({ queryKey: ['content', id] });
+      await queryClient.invalidateQueries({ queryKey: ['content', id] });
       // Version history bhi refresh karo agar open hai
       if (activeArtifact?.id) {
         queryClient.invalidateQueries({
@@ -672,22 +686,56 @@ export default function ContentWorkspacePage() {
           <div className="flex-1 overflow-y-auto p-6">
             {/* VIEW MODE */}
             {mode === 'view' && (
-              hasContent ? (
-                <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
-                    {content}
-                  </pre>
-                </div>
-              ) : (
-                <EmptyContentState
-                  platform={activeTab}
-                  platformLabel={activePlatformLabel}
-                  wasSelected={wasSelected}
-                  selectedPlatforms={selectedPlatforms}
-                  onRegenerate={() => rerunMutation.mutate()}
-                  isRegenerating={rerunMutation.isPending}
-                />
-              )
+              <>
+                {lastDiff && (
+                  <div className={cn(
+                    'mb-4 p-3 rounded-lg border text-xs flex items-start gap-2',
+                    lastDiff.identical
+                      ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-600'
+                      : 'bg-green-500/10 border-green-500/30 text-green-600 dark:text-green-400'
+                  )}>
+                    <span className="text-base shrink-0">
+                      {lastDiff.identical ? '⚠️' : '✅'}
+                    </span>
+                    <div className="flex-1">
+                      <p className="font-medium">
+                        {lastDiff.identical
+                          ? 'Content was already well-humanized'
+                          : `Re-humanized: ${lastDiff.summary}`
+                        }
+                      </p>
+                      {!lastDiff.identical && (
+                        <p className="text-green-500/70 mt-0.5">
+                          {lastDiff.changePercent}% content changed
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setLastDiff(null)}
+                      className="text-muted-foreground hover:text-foreground shrink-0"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
+
+                {hasContent ? (
+                  <div className="prose prose-sm max-w-none dark:prose-invert">
+                    <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground">
+                      {content}
+                    </pre>
+                  </div>
+                ) : (
+                  <EmptyContentState
+                    platform={activeTab}
+                    platformLabel={activePlatformLabel}
+                    wasSelected={wasSelected}
+                    selectedPlatforms={selectedPlatforms}
+                    onRegenerate={() => rerunMutation.mutate()}
+                    isRegenerating={rerunMutation.isPending}
+                  />
+                )}
+              </>
             )}
 
             {/* EDIT MODE */}
@@ -814,25 +862,61 @@ export default function ContentWorkspacePage() {
                         key={ver.id}
                         className="border rounded-lg p-4 bg-card hover:border-primary/50 transition-colors space-y-3"
                       >
+                        {/* Header */}
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary" className="font-mono text-xs">
                               v{ver.version_number}
                             </Badge>
-                            <Badge className="capitalize text-[11px]" variant={ver.change_type === 'refined' ? 'secondary' : 'outline'}>
-                              {ver.change_type}
+                            <Badge
+                              className="capitalize text-[11px]"
+                              variant={
+                                ver.change_type === 'humanized' ? 'default' :
+                                ver.change_type === 'refined'   ? 'secondary' : 'outline'
+                              }
+                            >
+                              {ver.change_type === 'humanized' ? '✦ humanized' :
+                               ver.change_type === 'refined'   ? '✨ refined'  :
+                               ver.change_type === 'generated' ? '🤖 generated' :
+                               ver.change_type === 'edited'    ? '✏️ edited'   :
+                               ver.change_type}
                             </Badge>
-                            {ver.change_summary && (
-                              <span className="text-xs text-muted-foreground truncate max-w-xs">
-                                {ver.change_summary}
-                              </span>
+
+                            {/* ✅ Change percent badge */}
+                            {ver.diff_data?.changePercent !== undefined && (
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  'text-[10px]',
+                                  ver.diff_data.changePercent < 3
+                                    ? 'text-yellow-500 border-yellow-500/30'
+                                    : 'text-green-500 border-green-500/30'
+                                )}
+                              >
+                                {ver.diff_data.changePercent < 3
+                                  ? 'minimal changes'
+                                  : `${ver.diff_data.changePercent}% changed`
+                                }
+                              </Badge>
                             )}
                           </div>
+
                           <div className="flex items-center gap-3">
+                            {/* Char diff */}
+                            {ver.char_diff !== undefined && ver.char_diff !== 0 && (
+                              <span className={cn(
+                                'text-xs font-mono',
+                                ver.char_diff > 0 ? 'text-green-500' : 'text-red-500'
+                              )}>
+                                {ver.char_diff > 0 ? `+${ver.char_diff}` : ver.char_diff} chars
+                              </span>
+                            )}
+
                             <span className="text-xs text-muted-foreground flex items-center gap-1">
                               <Clock className="w-3 h-3" />
                               {new Date(ver.created_at).toLocaleString()}
                             </span>
+
                             <Button
                               size="sm"
                               variant="outline"
@@ -844,12 +928,62 @@ export default function ContentWorkspacePage() {
                           </div>
                         </div>
 
+                        {/* Change Summary */}
+                        {ver.change_summary && (
+                          <p className="text-xs text-muted-foreground bg-muted/30 px-2 py-1 rounded">
+                            {ver.change_summary}
+                          </p>
+                        )}
+
+                        {/* ✅ Diff — kya change hua */}
+                        {ver.diff_data && (
+                          (ver.diff_data.removed && ver.diff_data.removed.length > 0) ||
+                          (ver.diff_data.added && ver.diff_data.added.length > 0)
+                        ) && (
+                          <div className="space-y-2">
+                            {/* Removed sentences */}
+                            {ver.diff_data.removed && ver.diff_data.removed.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="text-[10px] uppercase tracking-wide text-red-500/70 font-semibold">
+                                  Removed / Changed
+                                </p>
+                                {ver.diff_data.removed.slice(0, 3).map((sentence, i) => (
+                                  <div
+                                    key={i}
+                                    className="text-xs bg-red-500/5 border border-red-500/20 rounded px-2 py-1 text-red-600 dark:text-red-400 line-through opacity-70"
+                                  >
+                                    {sentence.slice(0, 120)}{sentence.length > 120 ? '...' : ''}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Added sentences */}
+                            {ver.diff_data.added && ver.diff_data.added.length > 0 && (
+                              <div className="space-y-1">
+                                <p className="text-[10px] uppercase tracking-wide text-green-500/70 font-semibold">
+                                  Added / Rewritten
+                                </p>
+                                {ver.diff_data.added.slice(0, 3).map((sentence, i) => (
+                                  <div
+                                    key={i}
+                                    className="text-xs bg-green-500/5 border border-green-500/20 rounded px-2 py-1 text-green-600 dark:text-green-400"
+                                  >
+                                    {sentence.slice(0, 120)}{sentence.length > 120 ? '...' : ''}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Content Preview */}
-                        <div className="bg-muted/30 rounded p-3 text-xs font-sans whitespace-pre-wrap max-h-32 overflow-y-auto text-foreground/80">
-                          {ver.content}
+                        <div className="bg-muted/30 rounded p-3 text-xs font-sans whitespace-pre-wrap max-h-28 overflow-y-auto text-foreground/80">
+                          {ver.content.slice(0, 300)}
+                          {ver.content.length > 300 ? '...' : ''}
                         </div>
 
-                        {/* User Prompt / Tags if refined */}
+                        {/* User Prompt */}
                         {ver.user_prompt && (
                           <p className="text-xs text-purple-600 dark:text-purple-400">
                             <strong>Prompt:</strong> {ver.user_prompt}

@@ -44,6 +44,53 @@ async function fetchBrandProfileWithDocs(brandProfileId: string | null) {
   };
 }
 
+// ─── Diff Helper Function ─────────────────────────────────────────────────────
+
+function generateTextDiff(original: string, modified: string): {
+  added:    string[];
+  removed:  string[];
+  summary:  string;
+  changePercent: number;
+} {
+  // Sentence level diff
+  const splitSentences = (text: string): string[] =>
+    text
+      .replace(/([.!?])\s+/g, '$1\n')
+      .split('\n')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+  const origSentences = splitSentences(original);
+  const modSentences  = splitSentences(modified);
+
+  const origSet = new Set(origSentences);
+  const modSet  = new Set(modSentences);
+
+  const added   = modSentences.filter(s => !origSet.has(s)).slice(0, 10);
+  const removed = origSentences.filter(s => !modSet.has(s)).slice(0, 10);
+
+  // Word level change percent
+  const origWords = original.split(/\s+/).length;
+  const modWords  = modified.split(/\s+/).length;
+  const commonChars = [...original].filter(c => modified.includes(c)).length;
+  const changePercent = Math.round(
+    (1 - commonChars / Math.max(original.length, modified.length)) * 100
+  );
+
+  const summary = [
+    added.length > 0   ? `${added.length} sentences rewritten` : '',
+    removed.length > 0 ? `${removed.length} sentences removed/changed` : '',
+    `${changePercent}% content changed`,
+    modWords > origWords
+      ? `+${modWords - origWords} words added`
+      : origWords > modWords
+      ? `-${origWords - modWords} words removed`
+      : 'Same word count',
+  ].filter(Boolean).join(' · ');
+
+  return { added, removed, summary, changePercent };
+}
+
 // ─── Schemas ──────────────────────────────────────────────────────────────────
 
 const tonalitySchema = z.object({
@@ -1000,6 +1047,23 @@ contentRouter.post(
         return;
       }
 
+      // ── Diff calculate karo ───────────────────────────────────────────────────────
+      const diff = generateTextDiff(sourceContent, newContent);
+
+      logger.info('Content diff calculated', {
+        requestId:     req.params.id,
+        changePercent: diff.changePercent,
+        summary:       diff.summary,
+      });
+
+      // ✅ Agar content same hai — warning log karo
+      if (diff.changePercent < 3) {
+        logger.warn('Re-humanize returned nearly identical content', {
+          requestId:     req.params.id,
+          changePercent: diff.changePercent,
+        });
+      }
+
       // ── 6. New artifact save karo ─────────────────────────────────────────
       const newArtifactId = uuidv4();
       const newMetadata   = {
@@ -1043,8 +1107,9 @@ contentRouter.post(
             change_type, change_summary,
             tokens_used, char_diff,
             previous_version_id,
-            created_by
-          ) VALUES ($1, $2, $3, $4, $5, $6, 'humanized', $7, $8, $9, $10, $11)`,
+            created_by,
+            diff_data
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'humanized', $7, $8, $9, $10, $11, $12)`,
           [
             uuidv4(),
             req.params.id,
@@ -1052,11 +1117,17 @@ contentRouter.post(
             (prevVersion?.version_number || 1) + 1,
             platform,
             newContent,
-            `Re-humanized (${intensity}) with brand rules | Score: ${ruleEngine.final_score || 'N/A'}`,
+            `Re-humanized (${intensity}) | ${diff.summary}`,
             tokensUsed,
             newContent.length - sourceContent.length,
             prevVersion?.id || null,
             req.user?.id || null,
+            JSON.stringify({
+              added:         diff.added,
+              removed:       diff.removed,
+              summary:       diff.summary,
+              changePercent: diff.changePercent,
+            }),
           ]
         );
       } catch (versionErr) {
@@ -1081,6 +1152,13 @@ contentRouter.post(
         content:     newContent,
         tokensUsed,
         platform,
+        diff: {
+          summary:       diff.summary,
+          changePercent: diff.changePercent,
+          added:         diff.added.slice(0, 5),
+          removed:       diff.removed.slice(0, 5),
+          identical:     diff.changePercent < 3,
+        },
         ruleEngine: {
           score:      ruleEngine.final_score   || null,
           passed:     ruleEngine.passed        || false,
@@ -1088,7 +1166,9 @@ contentRouter.post(
           falseNegativesEliminated:
             ruleEngine.false_negatives_eliminated || 0,
         },
-        message: 'Content re-humanized successfully',
+        message: diff.changePercent < 3
+          ? 'Content was already well-humanized — minimal changes made'
+          : 'Content re-humanized successfully',
       });
 
     } catch (err) {
