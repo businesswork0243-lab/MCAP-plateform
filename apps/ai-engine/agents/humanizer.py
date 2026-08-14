@@ -29,33 +29,59 @@ def _get_rule_engine():
 
 # ── System Prompt ─────────────────────────────────────────────────────────────
 
-SYSTEM = """You are an expert editor. Transform AI-generated content into 
-natural human prose in ONE pass. Do everything simultaneously:
+SYSTEM = """You are an expert human editor who understands when content 
+needs work and when it doesn't.
 
-TASK 1 — ELIMINATE FALSE NEGATIVES (CRITICAL):
-Any "not X, it's Y" construction is FORBIDDEN. Convert to direct assertion.
-  ❌ "It's not just crypto, it's trust"
-  ✅ "It builds trust through cryptography"
-  ❌ "Not only does it scale, but it secures"
-  ✅ "It scales and secures simultaneously"
+YOUR JOB: Analyze content honestly, then make ONLY the changes that 
+genuinely improve it. Do not change things that are already good.
 
-TASK 2 — REMOVE AI CLICHÉS:
-- Opening clichés: "In today's world", "In an era of", "At its core"
-- Transitions: "Furthermore", "Moreover", "In conclusion", "That being said"
-- Buzzwords: "Game-changing", "Revolutionary", "Leverage", "Utilize", "Robust"
-- AI tells: "Delve into", "Comprehensive overview", "Nuanced understanding"
+═══════════════════════════════════════════════════
+WHAT TO FIX (only if actually present):
+═══════════════════════════════════════════════════
 
-TASK 3 — HUMANIZE VOICE:
-- Vary sentence lengths (mix short 5-8 word and longer sentences)
-- Use contractions naturally (it's, you'll, we're)
-- Replace generic adjectives with specific concrete ones
+1. FALSE NEGATIVES → always fix these (non-negotiable):
+   ❌ "It's not just X, it's Y"  → ✅ State Y directly
+   ❌ "Not only X but also Y"    → ✅ "X and Y"  
+   ❌ "More than just X"         → ✅ What it actually is
 
-ABSOLUTE RULES:
-- Keep ALL facts, statistics, names, data exactly as they are
-- Do NOT add invented anecdotes or statistics
-- Do NOT reduce content length by more than 10%
-- Preserve overall structure
-- Output ONLY the humanized content. No commentary."""
+2. AI CLICHÉS → replace only if present:
+   Opening: "In today's world", "In an era of", "At its core"
+   Transitions: "Furthermore", "Moreover", "That being said"
+   Buzzwords: "Leverage", "Utilize", "Robust", "Seamless"
+   Tells: "Delve into", "Deep dive", "Paradigm shift"
+
+3. UNNATURAL RHYTHM → fix only if sentences are all same length:
+   Mix short and long sentences where rhythm feels robotic
+
+4. PASSIVE VOICE → convert only where it weakens the message
+
+5. GENERIC ADJECTIVES → replace only where they add no value
+
+═══════════════════════════════════════════════════
+WHAT NOT TO CHANGE:
+═══════════════════════════════════════════════════
+
+✓ Content that already sounds natural — leave it alone
+✓ Specific facts, statistics, names, data — never touch
+✓ Strong sentences that work well — don't rewrite them
+✓ The overall structure and flow — preserve it
+✓ The author's unique voice — enhance, don't erase
+
+═══════════════════════════════════════════════════
+HONEST ASSESSMENT RULE:
+═══════════════════════════════════════════════════
+
+If the content is already well-written and human-sounding:
+→ Make only the specific fixes that are needed
+→ Do not rewrite for the sake of rewriting
+→ It is okay if output is 90% similar to input IF input was already good
+
+If the content has many AI patterns:
+→ Rewrite substantially
+→ Every AI phrase must go
+→ Voice must feel authentically human
+
+OUTPUT: Only the improved content. No labels, no commentary."""
 
 
 INTENSITY_CONFIG = {
@@ -123,37 +149,85 @@ def _build_user_prompt(
 
     config = INTENSITY_CONFIG.get(intensity, INTENSITY_CONFIG["medium"])
 
-    # Pre-scan warnings
-    warnings = []
-    if pre_issues.get("false_negative_count", 0) > 0:
-        fns      = detect_false_negatives(content)
-        examples = [f"'{f['match']}'" for f in fns[:3]]
-        warnings.append(
-            f"⚠️ {pre_issues['false_negative_count']} FALSE NEGATIVE(S): "
-            f"{', '.join(examples)} — convert ALL to direct assertions"
+    # ── Actual issues detect karo ─────────────────────────────────────────────
+    fn_count      = pre_issues.get("false_negative_count", 0)
+    ai_openings   = pre_issues.get("ai_openings", 0)
+    buzzwords     = pre_issues.get("buzzwords", 0)
+    transitions   = pre_issues.get("transitions", 0)
+    total_issues  = pre_issues.get("total_issues", 0)
+
+    # ── Issue severity assess karo ────────────────────────────────────────────
+    has_critical  = fn_count > 0
+    has_moderate  = (ai_openings + buzzwords) >= 2
+    has_minor     = transitions >= 2
+    is_clean      = total_issues == 0
+
+    # ── Content ka honest assessment ─────────────────────────────────────────
+    if is_clean:
+        assessment = (
+            "✅ PRE-SCAN: No obvious AI patterns detected.\n"
+            "This content may already be well-written. "
+            "Apply only genuine improvements — do not rewrite unnecessarily."
         )
-    if pre_issues.get("ai_openings", 0) > 0:
-        warnings.append(f"⚠️ {pre_issues['ai_openings']} AI OPENING(S) — rewrite")
-    if pre_issues.get("buzzwords", 0) > 0:
-        warnings.append(f"⚠️ {pre_issues['buzzwords']} BUZZWORD(S) — replace")
+        task_block = (
+            "TASK: Review for any subtle improvements needed:\n"
+            "  • Any false negatives hiding in the text?\n"
+            "  • Any sentences that feel robotic despite no obvious patterns?\n"
+            "  • Any rhythm issues (all sentences same length)?\n"
+            "  • Any passive voice weakening the message?\n\n"
+            "If the content is genuinely good — make minimal changes.\n"
+            "If you find issues — fix them properly."
+        )
+    elif has_critical:
+        fns = detect_false_negatives(content)
+        fn_examples = [f"  → \"{f['match']}\"" for f in fns[:5]]
+        assessment = (
+            f"🔴 PRE-SCAN: {fn_count} FALSE NEGATIVE(S) found — must fix:\n"
+            + "\n".join(fn_examples)
+        )
+        task_block = (
+            "TASK: Fix all false negatives + any other AI patterns found.\n"
+            "  • Convert every false negative to direct positive assertion\n"
+            + (f"  • Remove {ai_openings} AI opening(s)\n" if ai_openings else "")
+            + (f"  • Replace {buzzwords} buzzword(s)\n" if buzzwords else "")
+            + (f"  • Fix {transitions} transition(s)\n" if transitions else "")
+            + "\nKeep everything else that works well."
+        )
+    elif has_moderate:
+        assessment = (
+            f"🟡 PRE-SCAN: {total_issues} AI pattern(s) found:\n"
+            + (f"  • {ai_openings} AI opening(s)\n" if ai_openings else "")
+            + (f"  • {buzzwords} buzzword(s)\n" if buzzwords else "")
+            + (f"  • {transitions} transition(s)\n" if transitions else "")
+        )
+        task_block = (
+            "TASK: Replace the specific AI patterns found above.\n"
+            "  • Rewrite sentences containing these patterns naturally\n"
+            "  • Keep sentences that already sound human\n"
+            "  • Do not over-edit — fix only what needs fixing"
+        )
+    else:
+        assessment = (
+            f"🟢 PRE-SCAN: {total_issues} minor issue(s) — light touch needed."
+        )
+        task_block = (
+            "TASK: Light polish only.\n"
+            "  • Fix the minor issues found\n"
+            "  • Leave the rest as-is"
+        )
 
-    warning_block = (
-        "\n".join(warnings)
-        if warnings
-        else "✅ No major issues detected"
-    )
+    # ── Intensity instruction ─────────────────────────────────────────────────
+    intensity_block = f"INTENSITY: {intensity.upper()} — {config['instruction']}"
 
-    # Banned phrases
-    all_banned = list(BANNED_PHRASES)
-    if brand_phrases:
-        all_banned.extend([p for p in brand_phrases if p not in all_banned])
-    banned_block = "\n".join(f"  • {p}" for p in all_banned[:30])
-
-    # Tonality
+    # ── Tonality ──────────────────────────────────────────────────────────────
     tonality_block = ""
-    if tonality and isinstance(tonality, dict):
+    effective_tone = tonality
+    if not effective_tone and isinstance(tonality, dict):
+        effective_tone = tonality
+
+    if effective_tone and isinstance(effective_tone, dict):
         active = [
-            (k, v) for k, v in tonality.items()
+            (k, v) for k, v in effective_tone.items()
             if isinstance(v, (int, float)) and v >= 5 and k in TONALITY_RULES
         ]
         active.sort(key=lambda x: x[1], reverse=True)
@@ -162,48 +236,36 @@ def _build_user_prompt(
                 f"  • {t.upper()} ({v}/10): {TONALITY_RULES[t]}"
                 for t, v in active[:3]
             ]
-            tonality_block = "TONE TO REFLECT:\n" + "\n".join(lines) + "\n\n"
+            tonality_block = "\nTONE TO MAINTAIN:\n" + "\n".join(lines)
 
+    # ── Language ──────────────────────────────────────────────────────────────
     lang_note = LANGUAGE_RULES.get(language, f"Language: {language}")
 
-    # ✅ Content word count — LLM ko pata chale kitna bada hai
-    word_count = len(content.split())
+    # ── Brand banned phrases ──────────────────────────────────────────────────
+    all_banned = list(BANNED_PHRASES)
+    if brand_phrases:
+        all_banned.extend([p for p in brand_phrases if p not in all_banned])
 
-    return f"""INTENSITY: {intensity.upper()} — {config['instruction']}
+    # Sirf top banned dikhao — overwhelming nahi karna
+    banned_block = "\n".join(f"  • {p}" for p in all_banned[:20])
 
-{warning_block}
-
+    return f"""{intensity_block}
 LANGUAGE: {lang_note}
+{tonality_block}
 
-{tonality_block}BANNED PHRASES (eliminate every instance found):
+━━━ CONTENT ANALYSIS ━━━
+{assessment}
+
+━━━ YOUR TASK ━━━
+{task_block}
+
+━━━ BANNED PHRASES (fix if present) ━━━
 {banned_block}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️  MANDATORY CHANGE REQUIREMENTS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-You MUST make VISIBLE changes to this content. 
-DO NOT return the same text. This is not optional.
-
-REQUIRED changes (make ALL of these):
-1. Replace at least 3 banned phrases with natural alternatives
-2. Rewrite the opening sentence completely
-3. Vary sentence lengths — break long sentences, combine short ones
-4. Replace at least 2 generic adjectives with specific concrete ones
-5. Convert any passive voice to active voice in at least 2 places
-6. If any sentence starts with same word as previous — change it
-
-PROOF OF WORK: Your output MUST be meaningfully different from input.
-If input has {word_count} words, output should have {word_count - 20} 
-to {word_count + 30} words (not exactly same count).
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-CONTENT TO HUMANIZE:
+━━━ CONTENT ━━━
 {content}
 
-Apply ALL three tasks + mandatory changes simultaneously.
-Output ONLY the humanized content — no labels, no commentary:"""
+Output only the improved content:"""
 
 
 # ── Main Entry Point ──────────────────────────────────────────────────────────

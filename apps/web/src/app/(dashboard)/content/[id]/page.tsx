@@ -298,37 +298,37 @@ export default function ContentWorkspacePage() {
   // ─── Rehumanize Mutation ──────────────────────────────────────────────────────
   const rehumanizeMutation = useMutation({
     mutationFn: () =>
-      // ✅ aiApi use karo — 4 min timeout
-      // ✅ intensity only — no deepMode
       aiApi.post(`/content/${id}/rehumanize`, {
         intensity: 'medium',
       }),
+
     onSuccess: async (response: any) => {
-      const diff = response.data?.diff;
+      const newArtifactId = response.data?.artifactId;
+      const diff          = response.data?.diff;
+
+      // Diff store karo — chahe 0% change ho
       if (diff) setLastDiff(diff);
 
-      // Content refresh karo
       await queryClient.invalidateQueries({ queryKey: ['content', id] });
-      // Version history bhi refresh karo agar open hai
+
       if (activeArtifact?.id) {
         queryClient.invalidateQueries({
           queryKey: ['versions', id, activeArtifact.id],
         });
       }
     },
+
     onError: (error: any) => {
+      const status = error?.response?.status;
       const detail =
         error?.response?.data?.detail ||
         error?.response?.data?.error   ||
-        error?.message                 ||
-        'Unknown error';
-
-      const status = error?.response?.status;
+        error?.message || 'Unknown error';
 
       if (status === 504) {
-        alert('Re-humanize timed out. Rule engine took too long. Please try again.');
+        alert('Re-humanize timed out. Please try again.');
       } else if (status === 503) {
-        alert('AI Engine is not available. Please try again in a moment.');
+        alert('AI Engine unavailable. Try again in a moment.');
       } else {
         alert(`Re-humanize failed: ${detail}`);
       }
@@ -689,27 +689,36 @@ export default function ContentWorkspacePage() {
               <>
                 {lastDiff && (
                   <div className={cn(
-                    'mb-4 p-3 rounded-lg border text-xs flex items-start gap-2',
-                    lastDiff.identical
-                      ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-600'
-                      : 'bg-green-500/10 border-green-500/30 text-green-600 dark:text-green-400'
+                    'mb-4 p-3 rounded-lg border text-xs flex items-start gap-2 transition-all',
+                    lastDiff.changePercent === 0
+                      ? 'bg-blue-500/10 border-blue-500/30 text-blue-500'
+                      : lastDiff.changePercent < 5
+                      ? 'bg-green-500/10 border-green-500/30 text-green-500'
+                      : 'bg-green-500/15 border-green-500/40 text-green-400'
                   )}>
-                    <span className="text-base shrink-0">
-                      {lastDiff.identical ? '⚠️' : '✅'}
+                    <span className="text-sm shrink-0">
+                      {lastDiff.changePercent === 0
+                        ? 'ℹ️'
+                        : '✅'
+                      }
                     </span>
+
                     <div className="flex-1">
                       <p className="font-medium">
-                        {lastDiff.identical
-                          ? 'Content was already well-humanized'
-                          : `Re-humanized: ${lastDiff.summary}`
+                        {lastDiff.changePercent === 0
+                          ? 'Content is already well-humanized — no changes needed'
+                          : lastDiff.changePercent < 5
+                          ? `Minor improvements applied`
+                          : `Re-humanized successfully`
                         }
                       </p>
-                      {!lastDiff.identical && (
-                        <p className="text-green-500/70 mt-0.5">
-                          {lastDiff.changePercent}% content changed
+                      {lastDiff.summary && lastDiff.changePercent > 0 && (
+                        <p className="opacity-60 mt-0.5">
+                          {lastDiff.summary}
                         </p>
                       )}
                     </div>
+
                     <button
                       onClick={() => setLastDiff(null)}
                       className="text-muted-foreground hover:text-foreground shrink-0"
