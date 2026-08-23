@@ -33,13 +33,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
     depends_on:
       - api
-    volumes:
-      - ./apps/web:/app
-      - /app/node_modules
-      - /app/.next
 
   api:
     build:
@@ -50,15 +46,20 @@ services:
     ports:
       - "4000:4000"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
+      - PORT=4000
       - DATABASE_URL=postgresql://mcap:mcap_secret@postgres:5432/mcap_db
       - REDIS_URL=redis://redis:6379
+      - AI_ENGINE_URL=http://ai-engine:8000
+      - JWT_SECRET=mcap-production-super-secret-jwt-key-2026-xyz
+      - JWT_REFRESH_SECRET=mcap-production-refresh-jwt-secret-key-2026-xyz
+      - RUN_WORKERS=true
+      - WORKER_CONCURRENCY=1
+      - LOG_LEVEL=info
+      - AI_TIMEOUT_MS=180000
     depends_on:
       - postgres
       - redis
-    volumes:
-      - ./apps/api:/app
-      - /app/node_modules
 
   ai-engine:
     build:
@@ -75,13 +76,11 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+      - OPENAI_MODEL=${OPENAI_MODEL:-deepseek-chat}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-6}
     depends_on:
       - postgres
       - redis
-    volumes:
-      - ./apps/ai-engine:/app
 
 volumes:
   postgres_data:

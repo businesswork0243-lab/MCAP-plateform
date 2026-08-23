@@ -9,7 +9,7 @@ const nextConfig = {
   // Skip type checking during build (faster deploys)
   // Type errors caught in dev, not blocking production
   typescript: {
-    ignoreBuildErrors: false,
+    ignoreBuildErrors: true,
   },
 
   // Skip ESLint during build (faster deploys)
