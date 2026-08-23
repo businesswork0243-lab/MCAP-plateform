@@ -42,7 +42,8 @@ export function useContentSocket({
     }
 
     const rawApiUrl =
-      process.env.NEXT_PUBLIC_API_URL || 'https://mcap-api.onrender.com';
+      process.env.NEXT_PUBLIC_API_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4000');
     const wsUrl = rawApiUrl.replace(/\/api\/?$/, '').replace(/\/+$/, '');
 
     console.log('[Socket] Connecting to', wsUrl);

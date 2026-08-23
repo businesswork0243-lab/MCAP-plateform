@@ -6,7 +6,7 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
 const RAW_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
-  'https://mcap-platefrom-production.up.railway.app';
+  (typeof window !== 'undefined' ? `${window.location.origin}/api` : 'http://localhost:4000/api');
 
 function ensureApiPath(url: string): string {
   const clean = url.replace(/\/+$/, '');
