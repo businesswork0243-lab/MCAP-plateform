@@ -28,7 +28,9 @@ export async function connectDB(): Promise<void> {
 
   const isLocal = 
     connectionString.includes('localhost') || 
-    connectionString.includes('127.0.0.1');
+    connectionString.includes('127.0.0.1') ||
+    connectionString.includes('@postgres') ||
+    connectionString.includes('mcap_secret');
 
   _pool = new Pool({
     connectionString,
@@ -37,7 +39,7 @@ export async function connectDB(): Promise<void> {
     connectionTimeoutMillis: 10_000,
     ssl: isLocal 
       ? false 
-      : { rejectUnauthorized: false }, // Render ka self-signed cert
+      : { rejectUnauthorized: false }, // Cloud database self-signed cert
   });
   pool = _pool;
 
