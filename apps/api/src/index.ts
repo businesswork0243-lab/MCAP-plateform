@@ -53,30 +53,8 @@ app.use(helmet({
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 
-const getAllowedOrigins = (): string[] => {
-  const origins = ['http://localhost:3000', 'http://localhost:3001'];
-  if (process.env.WEB_URL) {
-    origins.push(
-      process.env.WEB_URL.startsWith('http')
-        ? process.env.WEB_URL
-        : `https://${process.env.WEB_URL}`
-    );
-  }
-  return origins;
-};
-
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (origin.endsWith('.vercel.app')) return callback(null, true);
-    if (origin.endsWith('.up.railway.app')) return callback(null, true);
-    if (origin.endsWith('.railway.app')) return callback(null, true);
-    if (origin.endsWith('.onrender.com')) return callback(null, true);
-    if (origin.includes('localhost')) return callback(null, true);
-    if (getAllowedOrigins().includes(origin)) return callback(null, true);
-    logger.warn(`CORS blocked: ${origin}`);
-    callback(new Error(`CORS: origin ${origin} not allowed`));
-  },
+  origin: true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
