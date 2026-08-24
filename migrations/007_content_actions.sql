@@ -62,6 +62,7 @@ ALTER TABLE content_requests
 -- ═══════════════════════════════════════════════════════════
 
 -- Latest version per artifact
+DROP VIEW IF EXISTS artifact_latest_content CASCADE;
 CREATE OR REPLACE VIEW artifact_latest_content AS
 SELECT DISTINCT ON (a.id)
     a.id as artifact_id,
@@ -76,6 +77,7 @@ LEFT JOIN content_versions cv ON cv.id = a.current_version_id
 ORDER BY a.id, cv.created_at DESC NULLS LAST;
 
 -- Version history with user info
+DROP VIEW IF EXISTS content_version_history CASCADE;
 CREATE OR REPLACE VIEW content_version_history AS
 SELECT 
     cv.*,
