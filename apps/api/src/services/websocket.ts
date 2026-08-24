@@ -115,16 +115,7 @@ async function authenticateSocket(
 export function initWebSocket(httpServer: HttpServer): SocketServer {
   io = new SocketServer(httpServer, {
     cors: {
-      origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
-        if (
-          origin.endsWith('.onrender.com') ||
-          origin.endsWith('.railway.app') ||
-          origin.endsWith('.vercel.app')
-        ) return callback(null, true);
-        if (getAllowedOrigins().includes(origin)) return callback(null, true);
-        callback(new Error(`WebSocket CORS: ${origin} not allowed`));
-      },
+      origin: true,
       credentials: true,
       methods: ['GET', 'POST'],
     },
