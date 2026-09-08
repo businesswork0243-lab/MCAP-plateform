@@ -25,6 +25,9 @@ services:
       - redis_data:/data
 
   web:
+    # Built and pushed by CI; EC2 only pulls. `build` is kept so local
+    # `docker compose up --build` still works for development.
+    image: ghcr.io/businesswork0243-lab/mcap-web:latest
     build:
       context: .
       dockerfile: apps/web/Dockerfile
@@ -38,6 +41,7 @@ services:
       - api
 
   api:
+    image: ghcr.io/businesswork0243-lab/mcap-api:latest
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -62,6 +66,7 @@ services:
       - redis
 
   ai-engine:
+    image: ghcr.io/businesswork0243-lab/mcap-ai-engine:latest
     build:
       context: ./apps/ai-engine
       dockerfile: Dockerfile
