@@ -266,107 +266,186 @@ function TagInput({
 }
 
 // ─── Document Uploader ────────────────────────────────────────────────────────
+// Documents belong to a saved brand profile, so this component owns its own
+// server state rather than living in the unsaved form. The previous version
+// simulated a progress bar and never contacted the API, which left
+// brand_documents empty for every organization and starved the AI pipeline of
+// the verified facts it checks generated claims against.
 
-function DocumentUploader({
-  documents,
-  onDocumentsChange,
-}: {
-  documents: BrandDocument[];
-  onDocumentsChange: (docs: BrandDocument[]) => void;
-}) {
+const ACCEPTED_DOC_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+  'image/png',
+  'image/jpeg',
+];
+const MAX_DOC_SIZE = 10 * 1024 * 1024;
+const MAX_DOCS_PER_UPLOAD = 10;
+
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function getFileIcon(type: string) {
+  if (type?.includes('pdf')) return <FileText size={20} className="text-red-400" />;
+  if (type?.includes('word') || type?.includes('document'))
+    return <FileEdit size={20} className="text-blue-400" />;
+  if (type?.includes('image')) return <Image size={20} className="text-green-400" />;
+  return <Paperclip size={20} className="text-gray-400" />;
+}
+
+function DocumentUploader({ brandProfileId }: { brandProfileId: string | null }) {
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
-  const ACCEPTED_TYPES = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/plain',
-    'image/png',
-    'image/jpeg',
-  ];
-  const MAX_FILE_SIZE = 10 * 1024 * 1024;
+  const { data, isLoading } = useQuery({
+    queryKey: ['brand-documents', brandProfileId],
+    queryFn: () =>
+      api.get(`/brand/${brandProfileId}/documents`).then((r: any) => r.data),
+    enabled: !!brandProfileId,
+  });
+
+  const documents: any[] = data?.documents ?? [];
+
+  const uploadMutation = useMutation({
+    mutationFn: async (files: File[]) => {
+      const form = new FormData();
+      // Backend reads upload.array('files', 10)
+      files.forEach(f => form.append('files', f));
+      const res = await api.post(
+        `/brand/${brandProfileId}/documents`,
+        form,
+        { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }
+      );
+      return (res as any).data;
+    },
+    onSuccess: (result: any) => {
+      const failed = (result?.documents ?? []).filter(
+        (d: any) => d.status === 'failed'
+      );
+      setUploadError(
+        failed.length
+          ? `Text could not be extracted from ${failed
+              .map((d: any) => d.name)
+              .join(', ')}. The AI cannot use these.`
+          : null
+      );
+      queryClient.invalidateQueries({ queryKey: ['brand-documents', brandProfileId] });
+      queryClient.invalidateQueries({ queryKey: ['brand-profiles'] });
+    },
+    onError: (err: any) => {
+      setUploadError(
+        err?.response?.data?.error ||
+        err?.message ||
+        'Upload failed. Please try again.'
+      );
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (docId: string) =>
+      api.delete(`/brand/${brandProfileId}/documents/${docId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['brand-documents', brandProfileId] });
+      queryClient.invalidateQueries({ queryKey: ['brand-profiles'] });
+    },
+    onError: (err: any) => {
+      setUploadError(err?.response?.data?.error || 'Could not remove that document.');
+    },
+  });
 
   const handleFiles = useCallback(
-    async (files: FileList | File[]) => {
-      const fileArray = Array.from(files);
-      const newDocs: BrandDocument[] = fileArray
-        .filter(f => ACCEPTED_TYPES.includes(f.type) && f.size <= MAX_FILE_SIZE)
-        .map(f => ({
-          id: `doc-${Date.now()}-${Math.random()}`,
-          name: f.name,
-          size: f.size,
-          type: f.type,
-          status: 'uploading' as const,
-          progress: 0,
-        }));
+    (fileList: FileList | File[]) => {
+      setUploadError(null);
+      const all = Array.from(fileList);
 
-      let currentDocs = [...documents, ...newDocs];
-      onDocumentsChange(currentDocs);
+      const rejected = all.filter(
+        f => !ACCEPTED_DOC_TYPES.includes(f.type) || f.size > MAX_DOC_SIZE
+      );
+      const accepted = all
+        .filter(f => ACCEPTED_DOC_TYPES.includes(f.type) && f.size <= MAX_DOC_SIZE)
+        .slice(0, MAX_DOCS_PER_UPLOAD);
 
-      for (const doc of newDocs) {
-        for (let progress = 0; progress <= 100; progress += 20) {
-          await new Promise(r => setTimeout(r, 100));
-          currentDocs = currentDocs.map(d =>
-            d.id === doc.id
-              ? { ...d, progress, status: progress === 100 ? 'done' : 'uploading' }
-              : d
-          ) as BrandDocument[];
-          onDocumentsChange(currentDocs);
-        }
+      if (rejected.length) {
+        setUploadError(
+          `Skipped ${rejected.map(f => f.name).join(', ')} — must be PDF, DOCX, TXT, PNG or JPG under 10MB.`
+        );
       }
+      if (accepted.length) uploadMutation.mutate(accepted);
     },
-    [documents, onDocumentsChange]
+    [uploadMutation]
   );
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    handleFiles(e.dataTransfer.files);
+    if (brandProfileId) handleFiles(e.dataTransfer.files);
   };
 
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  };
+  // Uploads are addressed to a profile id, so there is nothing to attach to
+  // until the profile has been saved once.
+  if (!brandProfileId) {
+    return (
+      <div className="space-y-4">
+        <label className="flex items-center gap-2 text-sm font-medium text-gray-400">
+          <FolderOpen size={14} />
+          Brand Documents
+        </label>
+        <div className="flex items-start gap-2 px-4 py-4 rounded-xl border border-dashed border-white/15 bg-white/[0.02] text-sm text-gray-500">
+          <AlertTriangle size={15} className="shrink-0 mt-0.5 text-amber-400" />
+          <span>
+            Save this brand profile first, then upload documents here. The AI
+            uses them as the verified source for anything it writes about you.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
-  // File type → Lucide icon
-  const getFileIcon = (type: string) => {
-    if (type.includes('pdf')) return <FileText size={20} className="text-red-400" />;
-    if (type.includes('word') || type.includes('document')) return <FileEdit size={20} className="text-blue-400" />;
-    if (type.includes('image')) return <Image size={20} className="text-green-400" />;
-    return <Paperclip size={20} className="text-gray-400" />;
-  };
+  const isBusy = uploadMutation.isPending;
 
   return (
     <div className="space-y-4">
       <label className="flex items-center gap-2 text-sm font-medium text-gray-400">
         <FolderOpen size={14} />
         Brand Documents
-        <span className="text-xs text-gray-600">(PDF, DOCX, TXT, Images — max 10MB each)</span>
+        <span className="text-xs text-gray-600">
+          (PDF, DOCX, TXT, Images — max 10MB each)
+        </span>
       </label>
 
-      {/* Drop Zone */}
       <div
         onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${isDragging
-            ? 'border-violet-500 bg-violet-500/10'
-            : 'border-white/10 hover:border-violet-500/40 hover:bg-white/5'
-          }`}
+        onClick={() => !isBusy && fileInputRef.current?.click()}
+        className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all ${
+          isBusy
+            ? 'border-white/10 opacity-60 cursor-wait'
+            : isDragging
+            ? 'border-violet-500 bg-violet-500/10 cursor-pointer'
+            : 'border-white/10 hover:border-violet-500/40 hover:bg-white/5 cursor-pointer'
+        }`}
       >
         <div className="flex justify-center mb-3">
-          <Upload
-            size={36}
-            className={isDragging ? 'text-violet-400' : 'text-gray-600'}
-          />
+          {isBusy ? (
+            <Loader2 size={36} className="text-violet-400 animate-spin" />
+          ) : (
+            <Upload size={36} className={isDragging ? 'text-violet-400' : 'text-gray-600'} />
+          )}
         </div>
-        <p className="text-white font-medium">Drop files here</p>
+        <p className="text-white font-medium">
+          {isBusy ? 'Uploading and extracting text...' : 'Drop files here'}
+        </p>
         <p className="text-gray-500 text-sm mt-1">
-          or click to browse — brand guidelines, style guides, tone docs
+          {isBusy
+            ? 'Large PDFs can take a moment'
+            : 'or click to browse — brand guidelines, style guides, tone docs'}
         </p>
         <input
           ref={fileInputRef}
@@ -374,62 +453,79 @@ function DocumentUploader({
           multiple
           accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg"
           className="hidden"
-          onChange={e => e.target.files && handleFiles(e.target.files)}
+          disabled={isBusy}
+          onChange={e => {
+            if (e.target.files) handleFiles(e.target.files);
+            e.target.value = '';
+          }}
         />
       </div>
 
-      {/* File List */}
+      {uploadError && (
+        <p className="flex items-start gap-1.5 text-red-400 text-xs">
+          <XCircle size={12} className="shrink-0 mt-0.5" /> {uploadError}
+        </p>
+      )}
+
+      {isLoading && (
+        <p className="flex items-center gap-2 text-xs text-gray-500">
+          <Loader2 size={12} className="animate-spin" /> Loading documents...
+        </p>
+      )}
+
       {documents.length > 0 && (
         <div className="space-y-2">
-          {documents.map(doc => (
-            <div
-              key={doc.id}
-              className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10"
-            >
-              {getFileIcon(doc.type)}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-white font-medium truncate">{doc.name}</p>
-                <p className="text-xs text-gray-500">{formatSize(doc.size)}</p>
-                {doc.status === 'uploading' && (
-                  <div className="mt-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-violet-500 transition-all duration-200"
-                      style={{ width: `${doc.progress}%` }}
-                    />
-                  </div>
-                )}
+          {documents.map((doc: any) => {
+            const parsed = doc.parsing_status === 'done';
+            return (
+              <div
+                key={doc.id}
+                className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10"
+              >
+                {getFileIcon(doc.mime_type)}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium truncate">{doc.name}</p>
+                  <p className="text-xs text-gray-500">
+                    {formatSize(Number(doc.file_size) || 0)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {parsed ? (
+                    <span className="flex items-center gap-1 text-green-400 text-xs whitespace-nowrap">
+                      <Check size={12} /> Readable by AI
+                    </span>
+                  ) : (
+                    <span
+                      className="flex items-center gap-1 text-amber-400 text-xs whitespace-nowrap"
+                      title="No text could be extracted, so the AI cannot use this file."
+                    >
+                      <AlertTriangle size={12} /> No text found
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    disabled={deleteMutation.isPending}
+                    onClick={e => {
+                      e.stopPropagation();
+                      deleteMutation.mutate(doc.id);
+                    }}
+                    className="text-gray-500 hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-red-400/10 disabled:opacity-50"
+                    aria-label={`Remove ${doc.name}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                {doc.status === 'done' && (
-                  <span className="flex items-center gap-1 text-green-400 text-xs">
-                    <Check size={12} /> Done
-                  </span>
-                )}
-                {doc.status === 'uploading' && (
-                  <span className="flex items-center gap-1 text-violet-400 text-xs">
-                    <Loader2 size={12} className="animate-spin" />
-                    {doc.progress}%
-                  </span>
-                )}
-                {doc.status === 'error' && (
-                  <span className="flex items-center gap-1 text-red-400 text-xs">
-                    <XCircle size={12} /> Failed
-                  </span>
-                )}
-                <button
-                  type="button"
-                  onClick={e => {
-                    e.stopPropagation();
-                    onDocumentsChange(documents.filter(d => d.id !== doc.id));
-                  }}
-                  className="text-gray-500 hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-red-400/10"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
+      )}
+
+      {!isLoading && documents.length === 0 && (
+        <p className="text-xs text-gray-600">
+          No documents yet. Without them the AI has no verified facts about you
+          and will keep its writing impersonal.
+        </p>
       )}
     </div>
   );
@@ -1320,10 +1416,7 @@ export default function BrandPage() {
                 <p className="text-sm text-gray-500 mb-6">
                   Upload brand guidelines, tone docs, style guides.
                 </p>
-                <DocumentUploader
-                  documents={formProfile.documents}
-                  onDocumentsChange={v => update('documents', v)}
-                />
+                <DocumentUploader brandProfileId={activeProfileId} />
               </div>
             )}
 

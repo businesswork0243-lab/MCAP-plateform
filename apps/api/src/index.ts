@@ -53,8 +53,24 @@ app.use(helmet({
 
 // ── CORS ──────────────────────────────────────────────────────────────────────
 
+// `origin: true` reflects whatever Origin the caller sends, so every website
+// was an allowed caller. CORS_ORIGINS pins that to an allowlist; when it is
+// unset the old permissive behaviour stays (so a local or IP-only deployment
+// keeps working) but production says so loudly at boot.
+const corsOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
+if (corsOrigins.length === 0 && process.env.NODE_ENV === 'production') {
+  logger.warn(
+    'CORS_ORIGINS is not set — the API accepts requests from any origin. ' +
+    'Set it to your app origins once the app has a domain.'
+  );
+}
+
 app.use(cors({
-  origin: true,
+  origin: corsOrigins.length > 0 ? corsOrigins : true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID'],
