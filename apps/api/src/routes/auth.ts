@@ -524,7 +524,10 @@ authRouter.patch(
 // ─── POST /api/auth/onboarding ────────────────────────────────────────────────
 
 const onboardingSchema = z.object({
-  industry:         z.string().optional(),
+  // `industry` stays for older clients; new clients send the arrays.
+  industry:            z.string().optional(),
+  primaryIndustries:   z.array(z.string().min(1).max(100)).max(20).optional(),
+  secondaryIndustries: z.array(z.string().min(1).max(100)).max(20).optional(),
   teamSize:         z.string().optional(),
   useCase:          z.string().optional(),
   language:         z.string().optional(),
@@ -553,9 +556,25 @@ authRouter.post(
       const values: unknown[] = []
       let idx = 1
 
-      if (d.industry !== undefined) {
+      // Keep the legacy single-value column in sync with the first primary
+      // industry so anything still reading `industry` keeps working.
+      const primary   = d.primaryIndustries
+      const secondary = d.secondaryIndustries
+      const legacyIndustry = d.industry ?? primary?.[0]
+
+      if (primary !== undefined) {
+        updates.push(`primary_industries = $${idx++}`)
+        values.push(JSON.stringify(primary))
+      }
+
+      if (secondary !== undefined) {
+        updates.push(`secondary_industries = $${idx++}`)
+        values.push(JSON.stringify(secondary))
+      }
+
+      if (legacyIndustry !== undefined) {
         updates.push(`industry = $${idx++}`)
-        values.push(d.industry)
+        values.push(legacyIndustry)
       }
       
       if (d.teamSize !== undefined) {
@@ -594,7 +613,13 @@ authRouter.post(
         logger.error('Onboarding UPDATE failed:', {
           error: updateErr instanceof Error ? updateErr.message : updateErr,
           orgId: req.user!.organizationId,
-          fields: { industry: d.industry, teamSize: d.teamSize, language: d.language },
+          fields: {
+            industry: legacyIndustry,
+            primaryIndustries: primary,
+            secondaryIndustries: secondary,
+            teamSize: d.teamSize,
+            language: d.language,
+          },
         })
         // Don't fail the whole onboarding - return success anyway
         // User can update these later from settings
@@ -603,7 +628,9 @@ authRouter.post(
       logger.info('Onboarding completed', {
         userId:   req.user!.id,
         orgId:    req.user!.organizationId,
-        industry: d.industry,
+        industry: legacyIndustry,
+        primaryIndustries: primary,
+        secondaryIndustries: secondary,
         teamSize: d.teamSize,
       })
 
@@ -633,6 +660,8 @@ const orgUpdateSchema = z.object({
   name:     z.string().min(2).max(200).trim().optional(),
   language: z.string().optional(),
   industry: z.string().optional(),
+  primaryIndustries:   z.array(z.string().min(1).max(100)).max(20).optional(),
+  secondaryIndustries: z.array(z.string().min(1).max(100)).max(20).optional(),
   timezone: z.string().optional(),
 })
 
@@ -660,7 +689,16 @@ authRouter.patch(
 
       if (d.name)     { sets.push(`name = $${idx++}`);             vals.push(d.name)     }
       if (d.language) { sets.push(`default_language = $${idx++}`); vals.push(d.language) }
-      if (d.industry) { sets.push(`industry = $${idx++}`);         vals.push(d.industry) }
+      if (d.primaryIndustries) {
+        sets.push(`primary_industries = $${idx++}`)
+        vals.push(JSON.stringify(d.primaryIndustries))
+      }
+      if (d.secondaryIndustries) {
+        sets.push(`secondary_industries = $${idx++}`)
+        vals.push(JSON.stringify(d.secondaryIndustries))
+      }
+      const orgIndustry = d.industry ?? d.primaryIndustries?.[0]
+      if (orgIndustry) { sets.push(`industry = $${idx++}`);         vals.push(orgIndustry) }
       if (d.timezone) { sets.push(`timezone = $${idx++}`);         vals.push(d.timezone) }
 
       if (sets.length === 1) {

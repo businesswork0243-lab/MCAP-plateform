@@ -33,10 +33,17 @@ const ONBOARDING_PLATFORMS = [
   { key: 'podcast_notes',     label: 'Podcast Notes',      Icon: FaMicrophone, color: '#8B5CF6' },
 ];
 
+const INDUSTRIES = [
+  'SaaS', 'FinTech', 'Healthcare', 'E-commerce',
+  'Consulting', 'Marketing', 'Education', 'Real Estate',
+  'Web3/Crypto', 'AI/ML', 'Manufacturing', 'Other',
+];
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface OnboardingData {
-  industry:  string;
+  primaryIndustries:   string[];
+  secondaryIndustries: string[];
   teamSize:  string;
   language:  string;
   platforms: string[];
@@ -44,7 +51,8 @@ interface OnboardingData {
 }
 
 const DEFAULT_DATA: OnboardingData = {
-  industry:  '',
+  primaryIndustries:   [],
+  secondaryIndustries: [],
   teamSize:  '',
   language:  'English',
   platforms: [],
@@ -77,6 +85,28 @@ export default function OnboardingPage() {
     setData(prev => ({ ...prev, ...updates }));
   };
 
+  // An industry is either primary or secondary, never both — selecting it
+  // on one side clears it from the other.
+  const togglePrimaryIndustry = (ind: string) => {
+    setData(prev => ({
+      ...prev,
+      primaryIndustries: prev.primaryIndustries.includes(ind)
+        ? prev.primaryIndustries.filter(i => i !== ind)
+        : [...prev.primaryIndustries, ind],
+      secondaryIndustries: prev.secondaryIndustries.filter(i => i !== ind),
+    }));
+  };
+
+  const toggleSecondaryIndustry = (ind: string) => {
+    setData(prev => ({
+      ...prev,
+      secondaryIndustries: prev.secondaryIndustries.includes(ind)
+        ? prev.secondaryIndustries.filter(i => i !== ind)
+        : [...prev.secondaryIndustries, ind],
+      primaryIndustries: prev.primaryIndustries.filter(i => i !== ind),
+    }));
+  };
+
   const togglePlatform = (key: string) => {
     updateData({
       platforms: data.platforms.includes(key)
@@ -86,7 +116,7 @@ export default function OnboardingPage() {
   };
 
   const canProceed = () => {
-    if (step === 1) return !!data.industry;
+    if (step === 1) return data.primaryIndustries.length > 0;
     if (step === 2) return !!data.teamSize;
     if (step === 3) return data.platforms.length > 0;
     return true;
@@ -150,32 +180,88 @@ export default function OnboardingPage() {
               >
                 <div>
                   <label className="text-sm font-semibold text-white">
-                    What industry are you in? <span className="text-red-500">*</span>
+                    Which industries are you in?{' '}
+                    <span className="text-red-500">*</span>
                   </label>
-                  <p className="text-xs text-muted-foreground mt-1 mb-4">
-                    Helps AI tailor content to your industry
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Helps AI tailor content to your industry. Pick as many as
+                    apply — primary ones lead, secondary ones add context.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    'SaaS', 'FinTech', 'Healthcare', 'E-commerce',
-                    'Consulting', 'Marketing', 'Education', 'Real Estate',
-                    'Web3/Crypto', 'AI/ML', 'Manufacturing', 'Other',
-                  ].map(ind => (
-                    <button
-                      key={ind}
-                      onClick={() => updateData({ industry: ind })}
-                      className={cn(
-                        'p-3 text-sm font-medium rounded-xl border transition-all',
-                        data.industry === ind
-                          ? 'bg-violet-500/10 border-violet-500 text-white'
-                          : 'bg-white/5 border-white/10 text-gray-400 hover:border-white/20'
-                      )}
-                    >
-                      {ind}
-                    </button>
-                  ))}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-violet-300">
+                      Primary <span className="text-red-500">*</span>
+                    </p>
+                    <p className="text-[11px] text-gray-500">
+                      {data.primaryIndustries.length} selected
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {INDUSTRIES.map(ind => {
+                      const selected = data.primaryIndustries.includes(ind);
+                      return (
+                        <button
+                          key={ind}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => togglePrimaryIndustry(ind)}
+                          className={cn(
+                            'flex items-center justify-between gap-2 p-3 text-sm font-medium rounded-xl border transition-all',
+                            selected
+                              ? 'bg-violet-500/10 border-violet-500 text-white'
+                              : 'bg-white/5 border-white/10 text-gray-400 hover:border-white/20'
+                          )}
+                        >
+                          <span>{ind}</span>
+                          {selected && (
+                            <Check className="w-3.5 h-3.5 text-violet-400 shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                      Secondary <span className="text-gray-600">(optional)</span>
+                    </p>
+                    <p className="text-[11px] text-gray-500">
+                      {data.secondaryIndustries.length} selected
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {INDUSTRIES.map(ind => {
+                      const selected = data.secondaryIndustries.includes(ind);
+                      const isPrimary = data.primaryIndustries.includes(ind);
+                      return (
+                        <button
+                          key={ind}
+                          type="button"
+                          aria-pressed={selected}
+                          disabled={isPrimary}
+                          onClick={() => toggleSecondaryIndustry(ind)}
+                          title={isPrimary ? 'Already selected as primary' : undefined}
+                          className={cn(
+                            'flex items-center justify-between gap-2 p-3 text-sm font-medium rounded-xl border transition-all',
+                            isPrimary
+                              ? 'bg-white/[0.02] border-white/5 text-gray-600 cursor-not-allowed'
+                              : selected
+                              ? 'bg-sky-500/10 border-sky-500 text-white'
+                              : 'bg-white/5 border-white/10 text-gray-400 hover:border-white/20'
+                          )}
+                        >
+                          <span>{ind}</span>
+                          {selected && (
+                            <Check className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </motion.div>
             )}
