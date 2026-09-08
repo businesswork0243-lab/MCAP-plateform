@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
-import { formatRelative } from '@/lib/utils';
+import { formatRelative, copyToClipboard } from '@/lib/utils';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -209,7 +209,7 @@ function InviteLinkToast({
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
-    navigator.clipboard.writeText(url);
+    void copyToClipboard(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };

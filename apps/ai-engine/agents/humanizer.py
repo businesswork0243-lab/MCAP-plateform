@@ -138,6 +138,45 @@ LANGUAGE_RULES = {
 }
 
 
+# Brand profiles describe tone with one vocabulary and per-piece settings use
+# another, while TONALITY_RULES only knows the second. The two share no keys
+# at all — "confidence" vs "confident", "empathy" vs "empathetic",
+# "enthusiasm" vs "excited" — so a brand's tone sliders always produced an
+# empty tone block and never reached the model. This maps the first
+# vocabulary onto the second.
+BRAND_TONE_ALIASES: dict[str, str] = {
+    "confidence":    "confident",
+    "assertiveness": "confident",
+    "empathy":       "empathetic",
+    "enthusiasm":    "excited",
+    "humor":         "playful",
+    "formality":     "serious",
+    "technical":     "serious",
+}
+
+
+def normalize_tonality(tone: dict | None) -> dict:
+    """Accept either tone vocabulary and return keys TONALITY_RULES knows."""
+    if not isinstance(tone, dict):
+        return {}
+
+    out: dict[str, float] = {}
+    for raw_key, value in tone.items():
+        if not isinstance(value, (int, float)):
+            continue
+        key = str(raw_key).strip().lower()
+        # Per-piece sheets prefix their columns with tone_
+        if key.startswith("tone_"):
+            key = key[5:]
+        mapped = key if key in TONALITY_RULES else BRAND_TONE_ALIASES.get(key)
+        if not mapped:
+            continue
+        # Two sources can map to one trait (confidence and assertiveness);
+        # the stronger signal wins.
+        out[mapped] = max(out.get(mapped, 0), float(value))
+    return out
+
+
 def _build_user_prompt(
     content:       str,
     intensity:     str,
@@ -221,9 +260,9 @@ def _build_user_prompt(
 
     # ── Tonality ──────────────────────────────────────────────────────────────
     tonality_block = ""
-    effective_tone = tonality
-    if not effective_tone and isinstance(tonality, dict):
-        effective_tone = tonality
+    # The caller falls back to brand_data["tone_settings"], which uses the
+    # brand vocabulary, so normalise before matching against TONALITY_RULES.
+    effective_tone = normalize_tonality(tonality)
 
     if effective_tone and isinstance(effective_tone, dict):
         active = [
@@ -242,12 +281,22 @@ def _build_user_prompt(
     lang_note = LANGUAGE_RULES.get(language, f"Language: {language}")
 
     # ── Brand banned phrases ──────────────────────────────────────────────────
-    all_banned = list(BANNED_PHRASES)
-    if brand_phrases:
-        all_banned.extend([p for p in brand_phrases if p not in all_banned])
+    # The brand's own list goes FIRST. It used to be appended after the 42
+    # built-ins and the combined list was then cut to 20, so a brand's banned
+    # phrases never reached the prompt at all and were never enforced.
+    brand_banned = [
+        p for p in (brand_phrases or [])
+        if isinstance(p, str) and p.strip()
+    ]
+    seen = {p.lower() for p in brand_banned}
+    all_banned = brand_banned + [
+        p for p in BANNED_PHRASES if p.lower() not in seen
+    ]
 
-    # Sirf top banned dikhao — overwhelming nahi karna
-    banned_block = "\n".join(f"  • {p}" for p in all_banned[:20])
+    # Cap the generic tail only — every brand phrase is always shown.
+    max_generic = max(0, 30 - len(brand_banned))
+    shown = brand_banned + all_banned[len(brand_banned):][:max_generic]
+    banned_block = "\n".join(f"  • {p}" for p in shown)
 
     return f"""{intensity_block}
 LANGUAGE: {lang_note}

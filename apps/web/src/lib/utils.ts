@@ -49,3 +49,59 @@ export function formatDuration(seconds: number): string {
   if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
   return `${(seconds / 3600).toFixed(1)}h`;
 }
+
+// ─── Clipboard ────────────────────────────────────────────────────────────────
+
+/**
+ * Copy text to the clipboard, working outside a secure context.
+ *
+ * navigator.clipboard only exists on HTTPS or localhost. The app is served
+ * over plain HTTP, so navigator.clipboard was undefined and every Copy button
+ * threw a TypeError that nothing caught — the button simply did nothing.
+ * Falls back to a hidden textarea plus execCommand, which works on HTTP.
+ *
+ * Returns whether the copy succeeded, so callers can show honest feedback.
+ */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  if (!text) return false;
+
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Permission denied or a non-secure context — fall through.
+    }
+  }
+
+  if (typeof document === 'undefined') return false;
+
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    // Keep it off-screen and unfocusable so the page does not jump.
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-9999px';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+
+    const selection = document.getSelection();
+    const previous = selection && selection.rangeCount > 0
+      ? selection.getRangeAt(0)
+      : null;
+
+    textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
+    const ok = document.execCommand('copy');
+
+    document.body.removeChild(textarea);
+    if (previous && selection) {
+      selection.removeAllRanges();
+      selection.addRange(previous);
+    }
+    return ok;
+  } catch {
+    return false;
+  }
+}

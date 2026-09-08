@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { aiApi } from '@/lib/api';
+import { copyToClipboard } from '@/lib/utils';
 
 interface RepurposePanelProps {
   contentId: string;
@@ -130,7 +131,7 @@ export default function RepurposePanel({
                       {REPURPOSE_TARGETS.find(t => t.id === selectedTarget)?.label}
                     </p>
                     <button
-                      onClick={() => navigator.clipboard.writeText(results[selectedTarget])}
+                      onClick={() => void copyToClipboard(results[selectedTarget])}
                       className="text-xs text-gray-500 hover:text-white px-3 py-1 rounded-lg border border-white/10 hover:border-white/20 transition-all"
                     >
                       Copy

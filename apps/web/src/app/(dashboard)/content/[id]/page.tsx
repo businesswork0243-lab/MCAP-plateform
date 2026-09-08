@@ -7,7 +7,7 @@ import api, { aiApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils';
+import { cn, copyToClipboard } from '@/lib/utils';
 import {
   ArrowLeft, Copy, Download, RefreshCw, CheckCircle,
   XCircle, BarChart2, AlertTriangle, Lock, Edit3, Sparkles,
@@ -179,6 +179,7 @@ export default function ContentWorkspacePage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('canonical');
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
 
   // Edit / Refine / History / Modal state
   const [mode, setMode] = useState<'view' | 'edit' | 'refine' | 'history' | 'repurpose'>('view');
@@ -486,9 +487,14 @@ export default function ContentWorkspacePage() {
     );
   };
 
-  const copyContent = () => {
+  const copyContent = async () => {
     if (!content) return;
-    navigator.clipboard.writeText(content);
+    const ok = await copyToClipboard(content);
+    if (!ok) {
+      setCopyFailed(true);
+      setTimeout(() => setCopyFailed(false), 4000);
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -686,7 +692,7 @@ export default function ContentWorkspacePage() {
 
                   <Button variant="ghost" size="sm" onClick={copyContent}>
                     <Copy className="w-3.5 h-3.5 mr-1" />
-                    {copied ? 'Copied!' : 'Copy'}
+                    {copyFailed ? 'Press Ctrl+C' : copied ? 'Copied!' : 'Copy'}
                   </Button>
                 </>
               )}
