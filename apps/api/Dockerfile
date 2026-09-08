@@ -3,6 +3,7 @@
 # Build Context: Repository ROOT
 # ═══════════════════════════════════════════════════════════
 
+# syntax=docker/dockerfile:1
 FROM node:20-alpine AS base
 WORKDIR /app
 RUN apk add --no-cache libc6-compat wget
@@ -13,7 +14,7 @@ COPY package.json package-lock.json* ./
 COPY turbo.json ./
 COPY apps/api/package.json ./apps/api/
 COPY packages/shared/package.json ./packages/shared/
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 
 # ─── Builder ──────────────────────────────────────
 FROM base AS builder
@@ -37,7 +38,7 @@ RUN echo "=== Verifying migrations folder ===" && \
     echo "=== Migrations verified ==="
 
 # Build
-RUN npx turbo run build --filter=@mcap/api
+RUN --mount=type=cache,target=/app/.turbo npx turbo run build --filter=@mcap/api
 
 # Verify build output
 RUN echo "=== Verifying dist folder ===" && \

@@ -1,7 +1,14 @@
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Output mode
   output: 'standalone',
+
+  // Trace from the monorepo root so the standalone bundle picks up the
+  // hoisted node_modules and @mcap/shared. Without this Next guesses the
+  // root, and the guess differs between the host and the Docker builder.
+  outputFileTracingRoot: path.join(__dirname, '../../'),
 
   // React strict mode for better development
   reactStrictMode: true,
