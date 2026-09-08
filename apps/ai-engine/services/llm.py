@@ -159,6 +159,34 @@ async def complete_claude(
 
 # ─── Unified Entry Point ──────────────────────────────────────────────────────
 
+def _describe(err: Exception | None) -> str:
+    """Readable one-liner for a provider failure.
+
+    Provider SDKs raise long nested payloads; the operator mostly needs to
+    know whether this is billing, auth, rate limiting or a timeout.
+    """
+    if err is None:
+        return "not attempted"
+
+    text = str(err).strip() or type(err).__name__
+    lowered = text.lower()
+
+    if "credit balance" in lowered or "insufficient" in lowered or "quota" in lowered:
+        hint = "out of credit — top up the account"
+    elif "invalid x-api-key" in lowered or "authentication" in lowered or "401" in lowered:
+        hint = "bad or expired API key"
+    elif "rate limit" in lowered or "429" in lowered:
+        hint = "rate limited"
+    elif "timeout" in lowered or "timed out" in lowered:
+        hint = "timed out"
+    else:
+        hint = ""
+
+    if len(text) > 300:
+        text = text[:300] + "..."
+    return f"{hint} ({text})" if hint else text
+
+
 async def complete(
     system:      str,
     user:        str,
@@ -191,10 +219,12 @@ async def complete(
         return await complete_openai(system, user, temperature, max_tokens)
 
     # Try primary
+    primary_err: Exception | None = None
     if has_primary:
         try:
             return await _call(primary)
         except Exception as err:
+            primary_err = err
             log.warning(
                 "Primary LLM (%s) failed after retries: %s — trying fallback",
                 primary, err
@@ -206,10 +236,19 @@ async def complete(
             log.info("Using fallback LLM: %s", secondary)
             return await _call(secondary)
         except Exception as fallback_err:
+            # The primary error used to be swallowed into "see logs", which
+            # meant diagnosing an outage required SSH access to the box. Both
+            # reasons now travel with the error to the UI.
             raise RuntimeError(
                 f"Both LLM providers failed. "
-                f"Primary ({primary}): see logs. "
-                f"Fallback ({secondary}): {fallback_err}"
+                f"Primary ({primary}): {_describe(primary_err)}. "
+                f"Fallback ({secondary}): {_describe(fallback_err)}"
             ) from fallback_err
+
+    if primary_err is not None:
+        raise RuntimeError(
+            f"LLM provider '{primary}' failed and no fallback is configured: "
+            f"{_describe(primary_err)}"
+        ) from primary_err
 
     raise RuntimeError(f"LLM provider '{primary}' not available")
