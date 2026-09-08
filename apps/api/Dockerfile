@@ -1,9 +1,9 @@
+# syntax=docker/dockerfile:1
 # ═══════════════════════════════════════════════════════════
 # M-CAP API - Production Dockerfile
 # Build Context: Repository ROOT
 # ═══════════════════════════════════════════════════════════
 
-# syntax=docker/dockerfile:1
 FROM node:20-alpine AS base
 WORKDIR /app
 RUN apk add --no-cache libc6-compat wget

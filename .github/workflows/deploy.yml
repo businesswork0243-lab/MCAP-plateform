@@ -25,6 +25,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The runner ships with ~25GB of preinstalled toolchains we do not
+      # use. Three image builds plus their caches can exhaust what is left,
+      # and npm ci then fails with a bare exit 1.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc                       /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          sudo apt-get clean
+          df -h /
+
       - uses: docker/setup-buildx-action@v3
 
       - uses: docker/login-action@v3
@@ -43,7 +53,7 @@ jobs:
             ${{ env.IMAGE_PREFIX }}-api:latest
             ${{ env.IMAGE_PREFIX }}-api:${{ github.sha }}
           cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
+          cache-to: type=gha,mode=min,scope=api
 
       - name: Build and push web
         uses: docker/build-push-action@v5
@@ -55,7 +65,7 @@ jobs:
             ${{ env.IMAGE_PREFIX }}-web:latest
             ${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}
           cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
+          cache-to: type=gha,mode=min,scope=web
 
       - name: Build and push ai-engine
         uses: docker/build-push-action@v5
@@ -67,7 +77,7 @@ jobs:
             ${{ env.IMAGE_PREFIX }}-ai-engine:latest
             ${{ env.IMAGE_PREFIX }}-ai-engine:${{ github.sha }}
           cache-from: type=gha,scope=ai-engine
-          cache-to: type=gha,mode=max,scope=ai-engine
+          cache-to: type=gha,mode=min,scope=ai-engine
 
   deploy:
     needs: build
