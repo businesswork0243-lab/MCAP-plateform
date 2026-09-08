@@ -441,6 +441,12 @@ class FullPipelineRequest(BaseModel):
     specialInstructions:   str       = ""
     seoEnabled:            bool      = False
     seoSettings:           dict      = Field(default_factory=dict)
+    # Per-piece emotional settings, e.g. {"excited": 7, "confident": 8}
+    tonalitySpectrum:      dict      = Field(default_factory=dict)
+    wordCount:             Optional[int] = None
+    # Ordered beat list that overrides the writing_structure lookup
+    custom_structure_flow: Optional[list[str]] = None
+    reading_level:         str       = "Professional"
 
 
 async def _safe_humanize(
@@ -565,8 +571,10 @@ async def run_full_pipeline(req: FullPipelineRequest):
             icp_description=req.icp_description,
             perspective=req.perspective,
             writing_structure=req.writing_structure,
+            custom_structure_flow=req.custom_structure_flow,
             platforms=req.targetPlatforms,
             context=req.context,
+            reading_level=req.reading_level,
             cta=req.cta,
             language=req.language,
             keywords=req.keywords,
@@ -579,6 +587,8 @@ async def run_full_pipeline(req: FullPipelineRequest):
             ),
             seo_enabled=req.seoEnabled,
             seo_settings=req.seoSettings,
+            tonality_spectrum=req.tonalitySpectrum,
+            word_count=req.wordCount,
         )
         pkg = compile_prompt(pdl)
 

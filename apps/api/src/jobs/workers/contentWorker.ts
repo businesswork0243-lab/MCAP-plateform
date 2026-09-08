@@ -161,11 +161,19 @@ async function callFullPipeline(jobData: ContentJobData): Promise<PipelineRespon
     specialInstructions: jobData.specialInstructions || '',
     seoEnabled: jobData.seoEnabled ?? false,
     seoSettings: jobData.seoSettings || {},
+    tonalitySpectrum: jobData.tonalitySpectrum || {},
+    wordCount: jobData.wordCount ?? null,
+    custom_structure_flow: jobData.custom_structure_flow ?? null,
+    reading_level: jobData.readingLevel || 'Professional',
   };
 
   logger.info('📡 Calling AI Engine /pipeline/run', {
     topic: payload.topic.slice(0, 60),
     platforms: payload.targetPlatforms,
+    wordCount: payload.wordCount,
+    tonality: Object.entries(payload.tonalitySpectrum)
+      .filter(([, v]) => (v as number) >= 6)
+      .map(([k, v]) => `${k}:${v}`),
     timeout: `${AI_TIMEOUT_MS}ms`,
   });
 

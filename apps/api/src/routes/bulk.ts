@@ -37,33 +37,80 @@ const upload = multer({
 
 // ── Row Schema ────────────────────────────────────────────────────────────────
 
+// Sheets are read with `raw: false` + `defval: ''`, so every cell arrives as a
+// string and a blank cell arrives as ''. Plain `.optional().default()` never
+// fires for '' — it only fires for `undefined` — so blanks have to be mapped to
+// undefined first, otherwise a blank enum cell invalidates the whole row.
+const blankToUndefined = (v: unknown): unknown =>
+  v === '' || v === null || (typeof v === 'string' && v.trim() === '') ? undefined : v;
+
+const optionalText = (fallback: string) =>
+  z.preprocess(blankToUndefined, z.string().optional().default(fallback));
+
+const optionalScore = (fallback: number) =>
+  z.preprocess(
+    blankToUndefined,
+    z.coerce.number().min(0).max(10).optional().default(fallback)
+  );
+
+// `z.coerce.boolean()` is Boolean(value), so the string 'FALSE' coerces to true.
+// Spreadsheets write TRUE/FALSE/yes/no/1/0, so parse them explicitly.
+const optionalBoolean = (fallback: boolean) =>
+  z.preprocess((v) => {
+    if (blankToUndefined(v) === undefined) return undefined;
+    if (typeof v === 'boolean') return v;
+    const s = String(v).trim().toLowerCase();
+    if (['true', 'yes', 'y', '1'].includes(s)) return true;
+    if (['false', 'no', 'n', '0'].includes(s)) return false;
+    return undefined;
+  }, z.boolean().optional().default(fallback));
+
 const bulkRowSchema = z.object({
   topic:                z.string().min(3).max(500),
-  objective:            z.string().optional().default('Build thought leadership'),
-  context:              z.string().optional().default(''),
-  platforms:            z.string().min(1),
-  writing_structure:    z.string().optional().default('thesis'),
-  perspective:          z.string().optional().default('Founder'),
-  language:             z.string().optional().default('English'),
-  cta_type:             z.string().optional().default('comment'),
-  keywords:             z.string().optional().default(''),
-  tone_excited:         z.coerce.number().min(0).max(10).optional().default(5),
-  tone_confident:       z.coerce.number().min(0).max(10).optional().default(6),
-  tone_curious:         z.coerce.number().min(0).max(10).optional().default(4),
-  tone_serious:         z.coerce.number().min(0).max(10).optional().default(5),
-  humanization_level:   z.enum(['light', 'medium', 'aggressive'])
-                         .optional().default('medium'),
-  word_count:           z.coerce.number().optional(),
-  special_instructions: z.string().optional().default(''),
-  brand_profile_name:   z.string().optional().default(''),
-  icp_name:             z.string().optional().default(''),
-  custom_audience:      z.string().optional().default(''),
-  enable_qa:            z.coerce.boolean().optional().default(true),
-  seo_enabled:          z.coerce.boolean().optional().default(false),
-  seo_primary_keyword:  z.string().optional().default(''),
+  objective:            optionalText('Build thought leadership'),
+  context:              optionalText(''),
+  platforms:            z.string().trim().min(1),
+  writing_structure:    optionalText('thesis'),
+  perspective:          optionalText('Founder'),
+  language:             optionalText('English'),
+  cta_type:             optionalText('comment'),
+  keywords:             optionalText(''),
+  tone_excited:         optionalScore(5),
+  tone_confident:       optionalScore(6),
+  tone_curious:         optionalScore(4),
+  tone_serious:         optionalScore(5),
+  humanization_level:   z.preprocess(
+                          (v) => {
+                            const t = blankToUndefined(v);
+                            return typeof t === 'string' ? t.trim().toLowerCase() : t;
+                          },
+                          z.enum(['light', 'medium', 'aggressive'])
+                            .optional().default('medium')
+                        ),
+  word_count:           z.preprocess(
+                          blankToUndefined,
+                          z.coerce.number().int().positive().optional()
+                        ),
+  special_instructions: optionalText(''),
+  brand_profile_name:   optionalText(''),
+  icp_name:             optionalText(''),
+  custom_audience:      optionalText(''),
+  enable_qa:            optionalBoolean(true),
+  seo_enabled:          optionalBoolean(false),
+  seo_primary_keyword:  optionalText(''),
 });
 
 type BulkRow = z.infer<typeof bulkRowSchema>;
+
+// "LinkedIn Post, X Thread" -> ['linkedin_post', 'x_thread'] — the keys the AI
+// engine's PLATFORM_SPECS uses. Applied to both the stored row and the queued
+// job so the two never disagree.
+function parsePlatforms(raw: string): string[] {
+  return raw
+    .split(',')
+    .map(p => p.trim().toLowerCase().replace(/[\s-]+/g, '_'))
+    .filter(Boolean);
+}
 
 // ── Excel Parser ──────────────────────────────────────────────────────────────
 
@@ -189,6 +236,19 @@ async function resolveProfiles(
 
 // ── Build Job Payload ─────────────────────────────────────────────────────────
 
+function buildTonalitySpectrum(row: BulkRow): Record<string, number> {
+  return {
+    excited:    row.tone_excited,
+    confident:  row.tone_confident,
+    curious:    row.tone_curious,
+    serious:    row.tone_serious,
+    angry:      0,
+    frustrated: 0,
+    empathetic: 5,
+    playful:    3,
+  };
+}
+
 function buildJobPayload(
   row:           BulkRow,
   resolved:      ResolvedProfiles,
@@ -199,27 +259,14 @@ function buildJobPayload(
 ): Omit<ContentJobData, 'requestId'> {
 
   // Parse platforms
-  const platforms = row.platforms
-    .split(',')
-    .map(p => p.trim().toLowerCase())
-    .filter(Boolean);
+  const platforms = parsePlatforms(row.platforms);
 
   // Parse keywords
   const keywords = row.keywords
     ? row.keywords.split(',').map(k => k.trim()).filter(Boolean)
     : [];
 
-  // Build tonality
-  const tonalitySpectrum = {
-    excited:   row.tone_excited,
-    confident: row.tone_confident,
-    curious:   row.tone_curious,
-    serious:   row.tone_serious,
-    angry:     0,
-    frustrated: 0,
-    empathetic: 5,
-    playful:   3,
-  };
+  const tonalitySpectrum = buildTonalitySpectrum(row);
 
   // Resolve audience
   let audience = 'General Business';
@@ -413,10 +460,7 @@ bulkRouter.post(
           const data = row.parsed!;
           const requestId = uuidv4();
 
-          const platforms = data.platforms
-            .split(',')
-            .map(p => p.trim())
-            .filter(Boolean);
+          const platforms = parsePlatforms(data.platforms);
 
           await client.query(
             `INSERT INTO content_requests (
@@ -427,7 +471,8 @@ bulkRouter.post(
               cta_type, language,
               humanization_enabled, humanization_level,
               qa_enabled, special_instructions,
-              keywords, seo_enabled,
+              keywords, seo_enabled, seo_settings,
+              word_count, tonality_spectrum,
               status, bulk_job_id, bulk_row_number,
               bulk_row_data
             ) VALUES (
@@ -438,9 +483,10 @@ bulkRouter.post(
               $11,$12,
               $13,$14,
               $15,$16,
-              $17,$18,
-              'queued',$19,$20,
-              $21
+              $17,$18,$19,
+              $20,$21,
+              'queued',$22,$23,
+              $24
             )`,
             [
               requestId, orgId, userId,
@@ -454,6 +500,13 @@ bulkRouter.post(
                 data.keywords.split(',').map(k => k.trim()).filter(Boolean)
               ),
               data.seo_enabled,
+              JSON.stringify(
+                data.seo_primary_keyword
+                  ? { primaryKeyword: data.seo_primary_keyword }
+                  : {}
+              ),
+              data.word_count ?? null,
+              JSON.stringify(buildTonalitySpectrum(data)),
               bulkJobId, row.rowNumber,
               JSON.stringify(data),
             ]

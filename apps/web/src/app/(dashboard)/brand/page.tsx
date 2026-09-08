@@ -840,6 +840,7 @@ export default function BrandPage() {
   const [activeTab, setActiveTab] = useState('identity');
   const [showICPModal, setShowICPModal] = useState(false);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -863,10 +864,10 @@ export default function BrandPage() {
   const activeProfile = profiles.find(p => p.id === activeProfileId) ?? null;
 
   useEffect(() => {
-    if (!activeProfileId && profiles.length > 0) {
+    if (!activeProfileId && !isCreatingNew && profiles.length > 0) {
       setActiveProfileId(profiles[0].id);
     }
-  }, [profiles, activeProfileId]);
+  }, [profiles, activeProfileId, isCreatingNew]);
 
   // ── Form state ────────────────────────────────────────────────────────────
   const [formProfile, setFormProfile] = useState<BrandProfile>(DEFAULT_FORM);
@@ -929,7 +930,7 @@ export default function BrandPage() {
           humor: data.toneSettings.humor,
           empathy: data.toneSettings.empathy,
         },
-        isDefault: !activeProfileId,
+        isDefault: activeProfileId ? false : profiles.length === 0,
       };
 
       if (activeProfileId) {
@@ -945,6 +946,7 @@ export default function BrandPage() {
         setActiveProfileId(data.id);
         lastSyncedProfileId.current = data.id;
       }
+      setIsCreatingNew(false);
       setSaveSuccess(true);
       setSaveError(null);
       queryClient.invalidateQueries({ queryKey: ['brand-profiles'] });
@@ -991,12 +993,14 @@ export default function BrandPage() {
   const handleSaveICP = (icp: ICPProfile) => createIcpMutation.mutate(icp);
 
   const handleSelectProfile = (id: string) => {
+    setIsCreatingNew(false);
     setActiveProfileId(id);
     setSaveError(null);
     setSaveSuccess(false);
   };
 
   const handleNewProfile = () => {
+    setIsCreatingNew(true);
     setActiveProfileId(null);
     lastSyncedProfileId.current = null;
     setFormProfile(DEFAULT_FORM);
@@ -1083,7 +1087,7 @@ export default function BrandPage() {
                 type="button"
                 onClick={handleNewProfile}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium
-                  whitespace-nowrap transition-all border ${activeProfileId === null
+                  whitespace-nowrap transition-all border ${isCreatingNew
                     ? 'bg-violet-600/20 border-violet-500 text-violet-300'
                     : 'bg-white/5 border-dashed border-white/20 text-gray-500 hover:border-violet-500/40 hover:text-gray-300'
                   }`}
@@ -1093,7 +1097,7 @@ export default function BrandPage() {
               </button>
             </div>
 
-            {!activeProfileId && (
+            {isCreatingNew && (
               <p className="flex items-center gap-1.5 text-xs text-amber-400 mt-2">
                 <AlertTriangle size={12} />
                 Creating new profile — fill details and save

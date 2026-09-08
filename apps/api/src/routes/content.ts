@@ -336,43 +336,19 @@ async function buildAIPayload(
     brandProfile:        brandData,  // ✅ Complete brand data with documents
     tonalitySpectrum:    data.tonalitySpectrum,
     wordCount:           data.wordCount,
+    readingLevel:        data.readingLevel || 'Professional',
     seoEnabled:          data.seoEnabled,
     seoSettings:         data.seoSettings,
   }
 }
 
+// Tonality, word count and SEO used to be flattened into this string because
+// the pipeline only accepted `specialInstructions`. They are now sent as
+// structured fields (tonalitySpectrum / wordCount / seoSettings), and the
+// prompt compiler builds richer blocks from them — so re-adding them here
+// would put the same instruction in the prompt twice.
 function buildSpecialInstructions(data: z.infer<typeof createRequestSchema>): string {
-  const parts: string[] = []
-
-  // Add tonality instructions
-  const highTones = Object.entries(data.tonalitySpectrum || {})
-    .filter(([, v]) => v >= 6)
-    .sort(([, a], [, b]) => b - a)
-    .map(([k, v]) => `${k} (${v}/10)`)
-
-  if (highTones.length > 0) {
-    parts.push(`Tonality for this piece: ${highTones.join(', ')}.`)
-  }
-
-  // Add word count instruction
-  if (data.wordCount) {
-    parts.push(`Target word count: approximately ${data.wordCount} words.`)
-  }
-
-  // Add SEO instructions
-  if (data.seoEnabled && data.seoSettings.primaryKeyword) {
-    parts.push(
-      `SEO optimize for "${data.seoSettings.primaryKeyword}". ` +
-      `Include H2/H3 headings, meta-friendly structure.`
-    )
-  }
-
-  // User's own instructions
-  if (data.specialInstructions) {
-    parts.push(data.specialInstructions)
-  }
-
-  return parts.join(' ')
+  return data.specialInstructions ?? ''
 }
 
 // ─── CONTENT ROUTES ───────────────────────────────────────────────────────────

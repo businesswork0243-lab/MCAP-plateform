@@ -107,6 +107,7 @@ export interface ContentJobData {
   seoSettings?: Record<string, unknown>;
   tonalitySpectrum?: Record<string, number>;
   wordCount?: number;
+  readingLevel?: string;
   brandProfileId?: string;
   projectId?: string;
   createdBy?: string;

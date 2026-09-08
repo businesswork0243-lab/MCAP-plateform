@@ -563,6 +563,17 @@ export default function BulkUploadPage() {
                 </div>
               </div>
 
+              {uploadMutation.isError && (
+                <div className="flex items-start gap-2 px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-300 text-xs">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    {(uploadMutation.error as any)?.response?.data?.error ||
+                     (uploadMutation.error as Error)?.message ||
+                     'Failed to queue the bulk job. Please try again.'}
+                  </span>
+                </div>
+              )}
+
               {/* Table */}
               <div className="bg-white/3 border border-white/10 rounded-2xl overflow-hidden shadow-xl">
                 <div className="overflow-x-auto">
