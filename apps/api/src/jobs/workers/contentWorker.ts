@@ -247,7 +247,7 @@ async function fetchBrandWithDocuments(
     const documentContext = docs.length > 0
       ? docs.map(d => `=== ${d.name} ===\n${d.parsed_content}`)
         .join('\n\n')
-        .slice(0, 8000)
+        .slice(0, 12000)
       : '';
 
     const parseJson = (val: unknown): unknown[] => {

@@ -37,6 +37,8 @@ CONTEXT:
 - Compliance Notes: {compliance_notes}
 {seo_block}
 
+{grounding_context}
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SCORING DIMENSIONS (rate 0-100 each):
 
@@ -49,6 +51,15 @@ SCORING DIMENSIONS (rate 0-100 each):
 7. clarityScore       — precise language, no vague filler, unambiguous claims
 8. engagementScore    — hook quality, reader retention, compelling narrative
 9. ctaScore           — CTA relevance and placement (score 50 if no CTA present)
+10. groundingScore    — factual grounding. Every first-person claim about the
+                        author (experience duration, role, employer, team,
+                        clients, incidents, named frameworks, metrics, project
+                        architecture) MUST be supported by the VERIFIED PROFILE
+                        FACTS above. Score 0-30 if the content invents any of
+                        them, 31-69 if claims are exaggerated or go beyond what
+                        the profile supports, 70-100 if every claim traces back
+                        to the profile. With no profile supplied, score on
+                        whether the content avoids first-person claims entirely.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FLAGS (only concrete, fixable issues):
@@ -58,6 +69,10 @@ FLAGS (only concrete, fixable issues):
 - unsupported vague claims ("everyone knows", "studies show" without citation)
 - structural gaps
 - formatting issues
+- fabricated_experience: a first-person claim absent from the verified profile
+  (quote the exact sentence)
+- fabricated_metric: a number, benchmark or scale figure with no source
+- fabricated_affiliation: a company, team, client or role not in the profile
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RESPOND WITH ONLY THIS JSON (no other text):
@@ -71,6 +86,7 @@ RESPOND WITH ONLY THIS JSON (no other text):
   "clarityScore":      <0-100>,
   "engagementScore":   <0-100>,
   "ctaScore":          <0-100>,
+  "groundingScore":    <0-100>,
   "flags":             ["specific issue 1", "specific issue 2"],
   "suggestions":       ["actionable suggestion 1", "suggestion 2"],
   "summary":           "One sentence overall assessment"
@@ -79,19 +95,25 @@ RESPOND WITH ONLY THIS JSON (no other text):
 # ─── Scoring Config ───────────────────────────────────────────────────────────
 
 SCORE_WEIGHTS = {
-    "brandScore":        0.20,
-    "readabilityScore":  0.15,
-    "platformScore":     0.15,
-    "structureScore":    0.10,
-    "humanizationScore": 0.10,
-    "consistencyScore":  0.10,
-    "clarityScore":      0.10,
+    "groundingScore":    0.20,
+    "brandScore":        0.15,
+    "readabilityScore":  0.12,
+    "platformScore":     0.12,
+    "structureScore":    0.08,
+    "humanizationScore": 0.08,
+    "consistencyScore":  0.08,
+    "clarityScore":      0.08,
     "engagementScore":   0.05,
-    "ctaScore":          0.05,
+    "ctaScore":          0.04,
 }
 
 PASS_THRESHOLD     = 70   # Overall score
 CRITICAL_MIN_SCORE = 50   # Any dimension below this = flag
+
+# Invented experience published under a real person's name is the one defect
+# that must never ship, so grounding gets a hard gate of its own rather than
+# being averaged away by strong writing scores.
+GROUNDING_MIN_SCORE = 70
 
 # Flags that are "warnings" (don't fail the piece)
 WARNING_FLAG_PATTERNS = [
@@ -104,6 +126,10 @@ CRITICAL_FLAG_PATTERNS = [
     "banned_phrase",
     "content_too_short",
     "structural_gap",
+    "fabricated_experience",
+    "fabricated_metric",
+    "fabricated_affiliation",
+    "fabricated",
 ]
 
 # ─── Scoring ──────────────────────────────────────────────────────────────────
@@ -134,6 +160,12 @@ def _determine_pass(overall: int, scores: dict, flags: list[str]) -> bool:
     Warnings (overused words, long sentences) do NOT fail the piece.
     """
     if overall < PASS_THRESHOLD:
+        return False
+
+    # Grounding gate — strong writing must not carry invented experience
+    # through. This is checked before the generic dimension floor because a
+    # grounding score of 60 is a hard fail, not a warning.
+    if scores.get("groundingScore", 70) < GROUNDING_MIN_SCORE:
         return False
 
     # Critical flags
@@ -257,6 +289,45 @@ async def run(
     key_messages   = brand.get("key_messages")   or []
     compliance     = brand.get("compliance_notes") or "None"
 
+    # The profile facts QA has to check the content against. Without these
+    # QA could score voice and structure but had no way to tell an invented
+    # career from a real one.
+    profile_facts = (brand.get("document_context") or "").strip()
+    identity_bits = [
+        f"{label}: {brand.get(key)}"
+        for label, key in (
+            ("Brand/Person", "name"),
+            ("Industry",     "industry"),
+            ("Positioning",  "positioning"),
+            ("Mission",      "mission"),
+            ("Life purpose", "life_purpose"),
+        )
+        if brand.get(key)
+    ]
+    verified_facts = "\n".join(identity_bits)
+    if profile_facts:
+        verified_facts = (verified_facts + "\n\n" + profile_facts).strip()
+
+    _RULE = "-------------------------------------------------------"
+
+    if verified_facts:
+        grounding_context = (
+            "VERIFIED PROFILE FACTS (the only support for first-person "
+            "claims about the author):\n"
+            f"{_RULE}\n"
+            f"{verified_facts[:6000]}\n"
+            f"{_RULE}\n"
+            "Any claim about the author that is absent above is fabricated. "
+            "Flag it and score groundingScore accordingly."
+        )
+    else:
+        grounding_context = (
+            "NO VERIFIED PROFILE SUPPLIED.\n"
+            "Therefore ANY first-person claim about the author's experience, "
+            "role, employer, projects or history is unsupported. Flag each one "
+            "and score groundingScore on how well the content avoids them."
+        )
+
     # SEO keyword for local check
     seo_keyword = None
     seo_block   = ""
@@ -279,6 +350,7 @@ async def run(
         ),
         compliance_notes=compliance,
         seo_block=seo_block,
+        grounding_context=grounding_context,
     )
 
     raw, tokens = await complete(
@@ -329,6 +401,7 @@ async def run(
         "clarityScore":      scores.get("clarityScore",      70),
         "engagementScore":   scores.get("engagementScore",   70),
         "ctaScore":          scores.get("ctaScore",          50),
+        "groundingScore":    scores.get("groundingScore",    70),
         # Composite
         "overallScore":      overall,
         "passed":            passed,

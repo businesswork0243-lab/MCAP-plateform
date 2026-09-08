@@ -1,10 +1,21 @@
 """Agent 2 — Platform Optimizer: adapts canonical draft to channel-specific format."""
 from services.llm import complete
 
+NL = chr(10)
+
 SYSTEM = """You are an expert content strategist specializing in platform-specific optimization.
 You understand the unique formatting, pacing, algorithm behavior, and stylistic conventions of each publishing channel.
 Transform content to fit the platform perfectly while preserving the core strategic message.
-OUTPUT: Write only the final optimized content. No meta-commentary, no labels, no preamble."""
+OUTPUT: Write only the final optimized content. No meta-commentary, no labels, no preamble.
+
+ADAPTATION LIMITS - these bind every rewrite:
+1. You may cut, compress, reorder and reformat. You may NOT add any fact,
+   claim, number, credential or experience that is absent from the draft.
+   Shortening must never introduce something new.
+2. Any MUST-PRESERVE item listed in the prompt has to survive into the final
+   output. Cut elsewhere to make room; those items are not optional.
+3. Where the draft is vague, keep it vague. Do not sharpen an unsourced claim
+   into a confident specific one."""
 
 # ─── Platform Specifications ──────────────────────────────────────────────────
 
@@ -205,6 +216,7 @@ async def run(
     seo_enabled:     bool       = False,
     seo_settings:    dict       = None,
     cta:             str        = "",
+    must_preserve:   str        = "",
 ) -> dict:
     """
     Adapt canonical draft to target platform format.
@@ -217,6 +229,13 @@ async def run(
     rules_text = "\n".join(f"  • {r}" for r in spec["rules"])
 
     extra_parts = []
+    if must_preserve and must_preserve.strip():
+        # Compression used to quietly drop strategic framing the user had
+        # explicitly asked for, because this agent never saw the request.
+        extra_parts.append(
+            "MUST-PRESERVE (from the original request - these survive the cut):"
+            + NL + must_preserve.strip()
+        )
     if audience_note:
         extra_parts.append(f"AUDIENCE NOTE:\n{audience_note}")
     if cta:
@@ -229,7 +248,7 @@ async def run(
         if seo_text:
             extra_parts.append(seo_text)
 
-    extra_instructions = "\n\n".join(extra_parts) if extra_parts else ""
+    extra_instructions = (NL + NL).join(extra_parts) if extra_parts else ""
 
     user_prompt = USER_TEMPLATE.format(
         platform_name=spec["name"],

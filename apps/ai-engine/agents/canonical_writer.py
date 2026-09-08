@@ -50,6 +50,48 @@ Write flowing prose that feels human and opinionated, not templated.
 ║  ❌ "The most profound shift isn't in the code, it's in the incentives."    ║
 ║  ✅ "The most profound shift is in the incentive architecture."              ║
 ║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                       FACTUAL GROUNDING CONTRACT                            ║
+║                    THIS OVERRIDES EVERY OTHER RULE                          ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  You are writing AS a real, identifiable person. Everything you state       ║
+║  about them will be published under their name.                             ║
+║                                                                              ║
+║  You may ONLY state a fact about the author if it appears in the            ║
+║  VERIFIED PROFILE FACTS or CONTEXT sections of this prompt.                 ║
+║                                                                              ║
+║  NEVER invent any of the following. There are no exceptions:                ║
+║                                                                              ║
+║  ❌  Years of experience ("a decade in this space", "for years")            ║
+║  ❌  Job titles, seniority or roles not stated in the profile               ║
+║  ❌  Companies founded, owned, advised, or worked at                         ║
+║  ❌  Teams, colleagues, clients, employees or mentees                        ║
+║  ❌  Specific incidents, bugs, outages, launches or deployments              ║
+║  ❌  Named frameworks or methodologies attributed to the author              ║
+║  ❌  Metrics, benchmarks, user counts, TPS figures, revenue                  ║
+║  ❌  Architecture or implementation details of the author's projects         ║
+║      beyond what the profile states                                          ║
+║  ❌  Emotional turning points, realisations or "lessons learned"             ║
+║                                                                              ║
+║  THE TEST: before writing any sentence containing "I", ask                  ║
+║  "Which line of the profile says this?" If you cannot point to one,         ║
+║  do not write the sentence.                                                  ║
+║                                                                              ║
+║  WHEN THE PROFILE IS THIN — this is the important case:                     ║
+║  Write a factual, educational, analytical piece instead. Explain the        ║
+║  subject on its merits, in the author's voice and vocabulary, WITHOUT       ║
+║  first-person experience claims. A shorter, accurate piece is a             ║
+║  SUCCESS. An engaging piece built on invented experience is a               ║
+║  TOTAL FAILURE, no matter how well written.                                 ║
+║                                                                              ║
+║  Never trade accuracy for narrative texture. If a structural section        ║
+║  asks for a story or evidence you do not have, satisfy that section        ║
+║  with verified material, industry-level analysis, or a clearly              ║
+║  hypothetical example marked as hypothetical. Never with invention.         ║
+║                                                                              ║
 ╚══════════════════════════════════════════════════════════════════════════════╝"""
 
 
@@ -199,6 +241,8 @@ STRATEGIC OBJECTIVE: {objective}
 CONTEXT & KEY POINTS:
 {context}
 
+{grounding_block}
+
 TARGET AUDIENCE: {audience}
 Audience emphasis: {icp_emphasis}
 Avoid: {icp_avoid}
@@ -238,6 +282,15 @@ If YES → Delete it. Start with the positive claim directly.
 This applies to EVERY sentence — not just the opening.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  BEFORE YOU WRITE ANY SENTENCE CONTAINING "I":
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Ask: "Which line of the verified profile states this?"
+
+No line states it → do not write the sentence. Rewrite it as analysis,
+or drop the claim. Do not soften an invented claim — remove it.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 EXECUTION RULES:
 - Write a compelling headline first
 - Follow the structural flow exactly — each section must be present and substantive
@@ -245,6 +298,8 @@ EXECUTION RULES:
 - Do NOT label sections — write flowing, connected prose
 - Maintain analytical depth throughout — no filler sentences
 - Include the CTA naturally in the conclusion
+- Every claim about the author must trace to the verified profile
+- Where verified material runs out, write analysis rather than anecdote
 
 Write the full article now:"""
 
@@ -270,7 +325,8 @@ async def run(
     word_count:            int | None       = None,
     special_instructions:  str              = "",
     tonality_spectrum:     dict | None      = None,
-    brand_document_context: str             = "",  # ✅ ADDED THIS
+    brand_document_context: str             = "",
+    verified_profile_facts: str             = "",
 ) -> dict:
 
     if custom_structure_flow and len(custom_structure_flow) > 0:
@@ -301,9 +357,11 @@ async def run(
     avoid    = icp_avoid    or icp["avoid"]
 
     # ── Brand Document Context Block ──
+    # 4000 chars truncated detailed profiles hard enough that the writer ran
+    # out of verified material and filled the gap with invention.
     brand_doc_block = ""
     if brand_document_context and brand_document_context.strip():
-        trimmed_docs = brand_document_context[:4000]
+        trimmed_docs = brand_document_context[:12000]
         brand_doc_block = f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BRAND DOCUMENT GUIDELINES (Base Voice):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -313,17 +371,58 @@ Ensure the canonical draft fundamentally aligns with this brand's voice,
 vocabulary, and strategic constraints from the very first draft.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
 
+    # ── Grounding Block ──
+    # Names the only permissible source of first-person claims. Without a
+    # profile the writer must drop the persona rather than invent one.
+    _parts = [
+        part.strip()
+        for part in (verified_profile_facts, brand_document_context)
+        if part and part.strip()
+    ]
+    verified = ("\n\n".join(_parts))[:12000]
+
+    if verified:
+        grounding_block = f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+VERIFIED PROFILE FACTS — THE ONLY PERMITTED SOURCE OF
+FIRST-PERSON CLAIMS ABOUT THE AUTHOR
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{verified}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Anything about the author that is absent above does not exist for this
+article. No experience durations, employers, teams, clients, incidents,
+named frameworks, metrics, or architecture details beyond these lines.
+
+If this profile does not contain a story or a piece of evidence that a
+structural section calls for, satisfy that section with verified facts or
+industry-level analysis. Never with an invented anecdote.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+    else:
+        grounding_block = """━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NO VERIFIED PROFILE SUPPLIED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Nothing about the author has been verified, so make NO first-person
+claims about their experience, role, employer, projects or history.
+
+Write in an analytical, educational register about the subject itself.
+Do not construct a persona to carry the argument.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+
     user_prompt = USER_TEMPLATE.format(
         topic=topic,
         objective=objective,
-        context=context or "No additional context. Draw from your expertise.",
+        context=context or (
+            "No additional context was supplied. Write a factual, analytical "
+            "treatment of the topic. Do NOT compensate by inventing personal "
+            "experience, incidents, or credentials for the author."
+        ),
         audience=audience,
         icp_emphasis=emphasis,
         icp_avoid=avoid,
         perspective=perspective,
         perspective_voice=pv,
         cta=cta or "No specific CTA required.",
-        brand_doc_block=brand_doc_block,  # ✅ ADDED THIS
+        brand_doc_block=brand_doc_block,
+        grounding_block=grounding_block,
         structure_name=structure_name,
         structure_purpose=structure_purpose,
         flow_steps=flow_text,

@@ -3,6 +3,8 @@
 from .rule_models import Rule, RuleType, RuleCategory, RuleSeverity
 
 
+NL = chr(10)
+
 STATIC_RULES: list[Rule] = [
 
     # ══════════════════════════════════════════════════════════════════
@@ -129,6 +131,94 @@ STATIC_RULES: list[Rule] = [
         examples={
             "bad":  "As Steve Jobs said, 'Content is king.'",
             "good": "Great content, like great design, prioritizes the user.",
+        }
+    ),
+
+    Rule(
+        id="SR014",
+        type=RuleType.STATIC,
+        category=RuleCategory.HALLUCINATION,
+        severity=RuleSeverity.CRITICAL,
+        name="No Invented Personal Experience",
+        description=(
+            "First-person claims about the author must come from the verified "
+            "brand profile."
+        ),
+        instruction=NL.join([
+            "The content is published under a real person's name. Flag any "
+            "first-person claim that the verified profile does not support:",
+            "  - Duration of experience ('a decade in this space', 'for years')",
+            "  - Companies founded, owned, advised, or worked at",
+            "  - Teams, colleagues, clients, employees or mentees",
+            "  - Specific incidents: bugs, outages, launches, deployments",
+            "  - Named frameworks or methods credited to the author",
+            "  - Emotional turning points and 'lessons learned'",
+            "",
+            "If no verified profile was supplied, flag EVERY first-person "
+            "experience claim. An engaging story built on invented experience "
+            "is a critical failure, not a stylistic preference.",
+        ]),
+        weight=0.20,
+        examples={
+            "bad":  "I have spent the better part of a decade building infrastructure, and I recall a protocol I advised.",
+            "good": "Infrastructure teams repeatedly hit the same constraint at this layer.",
+        }
+    ),
+
+    Rule(
+        id="SR015",
+        type=RuleType.STATIC,
+        category=RuleCategory.HALLUCINATION,
+        severity=RuleSeverity.CRITICAL,
+        name="No Invented Role or Seniority",
+        description=(
+            "The author's role, title and seniority must match the verified "
+            "profile."
+        ),
+        instruction=NL.join([
+            "Check how the content positions the author. Flag any role or "
+            "seniority the profile does not state:",
+            "  - 'As a founder...' when the profile says employee or engineer",
+            "  - 'As a CTO/CEO...' with no such title in the profile",
+            "  - Implied decision-making authority the profile does not grant",
+            "  - Advisory or board positions absent from the profile",
+            "",
+            "The narrative perspective setting is a voice instruction, not a "
+            "licence to claim a job the author does not hold.",
+        ]),
+        weight=0.15,
+        examples={
+            "bad":  "As a founder, I had to choose between throughput and modularity.",
+            "good": "That trade-off between throughput and modularity is decided early.",
+        }
+    ),
+
+    Rule(
+        id="SR016",
+        type=RuleType.STATIC,
+        category=RuleCategory.HALLUCINATION,
+        severity=RuleSeverity.CRITICAL,
+        name="No Invented Project Detail",
+        description=(
+            "Architecture and implementation details of the author's own work "
+            "must come from the profile."
+        ),
+        instruction=NL.join([
+            "When the content describes a project the author built, flag any "
+            "specifics the profile does not confirm:",
+            "  - Algorithms, protocols or data structures not named in it",
+            "  - Node counts, throughput, latency or scale figures",
+            "  - Contract functions, incentive or penalty mechanics",
+            "  - Security guarantees and detection claims",
+            "",
+            "Knowing which technologies someone used does not establish HOW "
+            "they used them. A verified technology list must not be expanded "
+            "into an unverified architecture.",
+        ]),
+        weight=0.15,
+        examples={
+            "bad":  "My P2P layer uses Kademlia XOR routing and self-heals across thousands of nodes.",
+            "good": "The protocol is built in Go with libp2p for peer-to-peer networking.",
         }
     ),
 

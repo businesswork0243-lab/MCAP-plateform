@@ -132,17 +132,26 @@ CTA_TEMPLATES = {
     "no_cta":            "No explicit CTA — let the content speak for itself.",
 }
 
+# These describe REGISTER only. They are not a licence to claim the title:
+# "hard-won lessons" here used to be read as an instruction to invent a career,
+# producing "As a founder, I..." for people who hold no such role.
+PERSPECTIVE_NOTE = (
+    "This describes the register to write in. It does NOT authorise claiming "
+    "this job title, seniority or its typical experiences. Only the verified "
+    "profile establishes who the author is."
+)
+
 PERSPECTIVE_VOICE = {
-    "Founder":        "first-person founder voice — personal conviction, hard-won lessons, strategic clarity",
-    "CEO":            "authoritative executive voice — vision, accountability, direction",
+    "Founder":        "direct, conviction-led register — strategic clarity and plain speech",
+    "CEO":            "authoritative executive register — vision, accountability, direction",
     "CMO / Marketing":"brand-savvy, audience-centric — positioning and market narrative",
-    "CTO / Technical":"technical authority — architecture decisions, engineering trade-offs",
-    "Researcher":     "evidence-driven academic voice — data, methodology, measured conclusions",
+    "CTO / Technical":"technical register — architecture reasoning and engineering trade-offs",
+    "Researcher":     "evidence-driven academic register — data, methodology, measured conclusions",
     "Analyst":        "objective analyst — trends, patterns, implications",
-    "Consultant":     "advisory voice — frameworks, recommendations, structured problem-solving",
-    "Expert":         "subject matter expert — deep knowledge, authoritative but accessible",
-    "Educator":       "teaching voice — clear explanations, examples, building understanding",
-    "Thought Leader": "visionary voice — forward-looking, challenging conventions",
+    "Consultant":     "advisory register — frameworks, recommendations, structured problem-solving",
+    "Expert":         "subject matter register — deep knowledge, authoritative but accessible",
+    "Educator":       "teaching register — clear explanations, examples, building understanding",
+    "Thought Leader": "forward-looking register — challenging conventions",
     "Brand":          "collective institutional voice — we, our, organizational perspective",
 }
 
@@ -170,7 +179,10 @@ def compile(req: PDLRequest) -> CompiledPromptPackage:
     cta_instruction = CTA_TEMPLATES.get(cta_key, req.cta or CTA_TEMPLATES["none"])
 
     # Perspective voice
-    perspective_voice = PERSPECTIVE_VOICE.get(req.perspective, req.perspective)
+    perspective_voice = (
+        PERSPECTIVE_VOICE.get(req.perspective, req.perspective)
+        + " | " + PERSPECTIVE_NOTE
+    )
 
     # Brand profile fields
     brand           = req.brand_profile or {}

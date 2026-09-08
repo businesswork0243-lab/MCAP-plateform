@@ -6,6 +6,8 @@ import logging
 import traceback
 from contextlib import asynccontextmanager
 from typing import Optional
+
+NEWLINE = chr(10)
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, Request, status
@@ -139,6 +141,43 @@ async def run_with_timeout(coro, timeout: int = PIPELINE_TIMEOUT):
 
 
 # ── Safe extractors ───────────────────────────────────────────────────────────
+
+def _build_verified_facts(profile: Optional[dict]) -> str:
+    """Flatten the brand profile into the fact list agents check against.
+
+    Agents previously received voice and vocabulary but no biography, so they
+    had nothing to test a first-person claim against.
+    """
+    if not profile:
+        return ""
+    lines: list[str] = []
+    for label, key in (
+        ("Name",         "name"),
+        ("Industry",     "industry"),
+        ("Website",      "website"),
+        ("Positioning",  "positioning"),
+        ("Mission",      "mission"),
+        ("Vision",       "vision"),
+        ("Life purpose", "life_purpose"),
+        ("Description",  "description"),
+    ):
+        val = profile.get(key)
+        if val:
+            lines.append(f"{label}: {val}")
+
+    for label, key in (
+        ("Key messages",      "key_messages"),
+        ("Value propositions", "value_propositions"),
+        ("Core values",       "core_values"),
+        ("Stands for",        "stands_for"),
+    ):
+        val = profile.get(key)
+        if isinstance(val, list) and val:
+            joined = "; ".join(str(v) for v in val[:10])
+            lines.append(f"{label}: {joined}")
+
+    return NEWLINE.join(lines)
+
 
 def _extract_rule_engine_meta(item) -> dict:
     """Safely extract rule_engine metadata from humanizer output."""
@@ -631,7 +670,8 @@ async def run_full_pipeline(req: FullPipelineRequest):
                 word_count=ci.get("word_count"),
                 special_instructions=ci.get("special_instructions", ""),
                 tonality_spectrum=ci.get("tonality_spectrum") or {},
-                brand_document_context=ci.get("brand_document_context", ""), # ✅ ADDED THIS
+                brand_document_context=ci.get("brand_document_context", ""),
+                verified_profile_facts=_build_verified_facts(profile_dict),
             )
         except Exception as e:
             log.error("Canonical writer FAILED: %s\n%s", e, traceback.format_exc())
@@ -664,6 +704,13 @@ async def run_full_pipeline(req: FullPipelineRequest):
             }
 
         # ── Agent 2: Platform Optimizer (parallel) ────────────────────────
+        # The adapter only ever saw the draft, so strategic framing the user
+        # asked for could vanish during compression. Carry the request through.
+        must_preserve = NEWLINE.join(
+            part.strip() for part in (req.context, req.specialInstructions)
+            if part and part.strip()
+        )[:2000]
+
         log.info("→ [2/5] Platform Optimizer starting for %d platforms...",
                  len(req.targetPlatforms))
         try:
@@ -676,6 +723,7 @@ async def run_full_pipeline(req: FullPipelineRequest):
                     seo_enabled=pkg.platform_instructions[p]["seo_enabled"],
                     seo_settings=pkg.platform_instructions[p]["seo_settings"],
                     cta=pkg.platform_instructions[p]["cta"],
+                    must_preserve=must_preserve,
                 )
                 for p in req.targetPlatforms
             ], return_exceptions=True)

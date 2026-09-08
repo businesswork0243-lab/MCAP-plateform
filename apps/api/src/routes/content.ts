@@ -32,7 +32,7 @@ async function fetchBrandProfileWithDocs(brandProfileId: string | null) {
   );
 
   const documentContext = docs.length > 0
-    ? docs.map(d => `=== ${d.name} ===\n${d.parsed_content}`).join('\n\n').slice(0, 8000)
+    ? docs.map(d => `=== ${d.name} ===\n${d.parsed_content}`).join('\n\n').slice(0, 12000)
     : '';
 
   return {
@@ -233,7 +233,7 @@ async function buildAIPayload(
         documentContext = brandDocs
           .map(d => `=== ${d.name} ===\n${d.parsed_content}`)
           .join('\n\n')
-          .slice(0, 8000) // AI context limit
+          .slice(0, 12000) // AI context limit
 
         logger.info('Brand documents loaded for AI', {
           brandId:     data.brandProfileId,

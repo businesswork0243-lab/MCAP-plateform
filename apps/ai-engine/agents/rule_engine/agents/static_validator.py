@@ -21,6 +21,11 @@ log = logging.getLogger("ai-engine.rule_engine.validator")
 # Kyun: Content good hai lekin strict rules ke wajah se hamesha fail hota tha
 PASS_THRESHOLD = 65.0
 
+# Rules whose violation means the content states something untrue about a
+# real person. These must fail outright rather than be soft-capped.
+GROUNDING_RULE_IDS = frozenset({"SR014", "SR015", "SR016"})
+GROUNDING_FAIL_CAP = 55.0
+
 # ✅ FIX 2: Max iterations 5 → 3
 # Kyun: 5 iterations = bahut slow, 3 kaafi hai
 MAX_ITERATIONS = 3
@@ -137,17 +142,35 @@ class StaticValidatorAgent:
             and v.category == RuleCategory.FALSE_NEGATIVE
         ]
 
+        # Grounding rules are separated from the softened hallucination
+        # bucket below: invented experience published under a real person's
+        # name has to fail and trigger regeneration, not just lower a score.
+        grounding_failures = [
+            v.rule_id for v in static_violations
+            if v.rule_id in GROUNDING_RULE_IDS
+        ]
+
         other_critical_failures = [
             v.rule_id for v in static_violations
             if v.severity == RuleSeverity.CRITICAL
             and v.category != RuleCategory.FALSE_NEGATIVE
+            and v.rule_id not in GROUNDING_RULE_IDS
         ]
 
-        all_critical_failures = fn_critical_failures + other_critical_failures
+        all_critical_failures = (
+            fn_critical_failures + grounding_failures + other_critical_failures
+        )
 
         # ✅ FIX 4: Cap sirf tab karo jab false negative ho
         # Other critical violations pe cap nahi — score naturally kam hoga
-        if fn_critical_failures:
+        if grounding_failures:
+            # Below PASS_THRESHOLD on purpose so regeneration runs.
+            combined_score = min(combined_score, GROUNDING_FAIL_CAP)
+            log.warning(
+                "[Validator] Grounding violations: %s -> score capped at %s%%",
+                grounding_failures, GROUNDING_FAIL_CAP,
+            )
+        elif fn_critical_failures:
             # False negative hai — cap at 72 (regeneration trigger hoga)
             combined_score = min(combined_score, 72.0)
             log.warning(
