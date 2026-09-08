@@ -223,7 +223,10 @@ STRUCTURE_FLOWS = {
 }
 
 WORD_COUNT_GUIDANCE = {
-    500:  "500 words — concise, punchy. Every sentence must earn its place.",
+    150:  "150 words — a single tight argument. One idea, stated well.",
+    200:  "200 words — very short. Two or three beats at most.",
+    300:  "300 words — short-form. Cover the flow in a sentence or two per beat.",
+    400:  "400 words — brief. Keep every section to its essential claim.",
     800:  "800 words — standard article length. Clear structure, no filler.",
     1200: "1200 words — in-depth treatment. Room for examples and analysis.",
     1500: "1500 words — long-form. Thorough exploration of the topic.",
@@ -344,6 +347,17 @@ async def run(
     if word_count:
         guidance       = WORD_COUNT_GUIDANCE.get(word_count, f"approximately {word_count} words")
         wc_instruction = f"LENGTH REQUIREMENT: {guidance}"
+        # Structure is a hard requirement ("each section must be present and
+        # substantive") while length was only guidance, so short targets lost
+        # the argument — a 300-word request measured 41% over. Tell the model
+        # explicitly how to satisfy both.
+        if word_count <= 400:
+            wc_instruction += (
+                "\n\nThis is a SHORT piece and the limit is firm. Cover every "
+                "structural beat, but give tight targets one or two sentences "
+                "each rather than a full paragraph. Compress — do not drop a "
+                "section, and do not run over."
+            )
     else:
         wc_instruction = "LENGTH: 1000-1500 words"
 
