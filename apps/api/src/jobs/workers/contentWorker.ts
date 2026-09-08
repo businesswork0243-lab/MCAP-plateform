@@ -6,6 +6,7 @@ import { query } from '../../db/connection';
 import { logger } from '../../lib/logger';
 import { ContentJobData } from '../queue';
 import { emitToOrg } from '../../services/websocket';
+import { toQualityScore } from './quality-score';
 
 // ✅ Shared keepalive — duplicate code hata diya
 import { waitForAiEngine, markAiEngineAlive } from '../../services/keepalive';
@@ -107,16 +108,21 @@ async function saveArtifact(
   platform: string,
   contentType: string,
   body: string,
-  extraMetadata: Record<string, unknown> = {}
+  extraMetadata: Record<string, unknown> = {},
+  qualityScore: Record<string, number> | null = null
 ): Promise<string> {
   const id = uuidv4();
   const metadata = { platform, contentType, ...extraMetadata };
 
   await query(
     `INSERT INTO artifacts
-      (id, content_request_id, agent_type, content, status, metadata, version)
-     VALUES ($1, $2, $3, $4, 'generated', $5, 1)`,
-    [id, requestId, contentType, body, JSON.stringify(metadata)]
+      (id, content_request_id, agent_type, content, status, metadata, version,
+       quality_score)
+     VALUES ($1, $2, $3, $4, 'generated', $5, 1, $6)`,
+    [
+      id, requestId, contentType, body, JSON.stringify(metadata),
+      qualityScore ? JSON.stringify(qualityScore) : null,
+    ]
   );
 
   logger.debug('Artifact saved', { id, requestId, platform, contentType });
@@ -427,7 +433,11 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
       }
       await saveArtifact(
         requestId, artifact.platform, 'qa_reviewed', artifact.finalContent,
-        { qa: artifact.qa, overallScore: artifact.overallScore, passed: artifact.passed }
+        { qa: artifact.qa, overallScore: artifact.overallScore, passed: artifact.passed },
+        toQualityScore({
+          ...(artifact.qa as Record<string, unknown> | undefined),
+          overallScore: artifact.overallScore,
+        })
       );
     }
 

@@ -510,23 +510,35 @@ export default function ContentWorkspacePage() {
   const qaQuality = useMemo(() => getArtifactQualityScore(qaArtifact), [qaArtifact]);
   const qaMetadata = useMemo(() => getArtifactMetadata(qaArtifact), [qaArtifact]);
 
+  // The per-dimension scores live at metadata.qa.*, one level deeper than
+  // this used to look, which is why every sub-score rendered as 0% while the
+  // overall score was correct.
+  const qaDetail = (qaMetadata?.qa && typeof qaMetadata.qa === 'object'
+    ? qaMetadata.qa
+    : {}) as Record<string, unknown>;
+
   const score = Number(
     qaQuality?.overall ??
     qaQuality?.overallScore ??
     qaMetadata?.overallScore ??
+    qaDetail?.overallScore ??
     0
   );
 
+  const pick = (snake: string, camel: string) =>
+    Number(qaQuality?.[snake] ?? qaDetail?.[camel] ?? qaMetadata?.[camel] ?? 0);
+
   const scoreMeta = {
-    brandScore: Number(qaQuality?.brand ?? qaMetadata?.brandScore ?? 0),
-    readabilityScore: Number(qaQuality?.readability ?? qaMetadata?.readabilityScore ?? 0),
-    platformScore: Number(qaQuality?.platform_fit ?? qaMetadata?.platformScore ?? 0),
-    structureScore: Number(qaQuality?.structure ?? qaMetadata?.structureScore ?? 0),
-    humanizationScore: Number(qaQuality?.humanization ?? qaMetadata?.humanizationScore ?? 0),
-    consistencyScore: Number(qaQuality?.consistency ?? qaMetadata?.consistencyScore ?? 0),
-    clarityScore: Number(qaQuality?.clarity ?? qaMetadata?.clarityScore ?? 0),
-    engagementScore: Number(qaQuality?.engagement ?? qaMetadata?.engagementScore ?? 0),
-    ctaScore: Number(qaQuality?.cta ?? qaMetadata?.ctaScore ?? 0),
+    brandScore:        pick('brand',        'brandScore'),
+    readabilityScore:  pick('readability',  'readabilityScore'),
+    platformScore:     pick('platform_fit', 'platformScore'),
+    structureScore:    pick('structure',    'structureScore'),
+    humanizationScore: pick('humanization', 'humanizationScore'),
+    consistencyScore:  pick('consistency',  'consistencyScore'),
+    clarityScore:      pick('clarity',      'clarityScore'),
+    engagementScore:   pick('engagement',   'engagementScore'),
+    ctaScore:          pick('cta',          'ctaScore'),
+    groundingScore:    pick('grounding',    'groundingScore'),
   };
 
   const qaFlags = Array.isArray(qaMetadata?.flags)
@@ -1143,6 +1155,18 @@ export default function ContentWorkspacePage() {
                 <div className="flex justify-between items-center py-1 border-b">
                   <span className="text-muted-foreground">Humanization</span>
                   <span>{scoreMeta.humanizationScore}%</span>
+                </div>
+                <div className="flex justify-between items-center py-1">
+                  <span className="text-muted-foreground">Factual Grounding</span>
+                  <span
+                    className={
+                      scoreMeta.groundingScore > 0 && scoreMeta.groundingScore < 70
+                        ? 'text-red-500 font-semibold'
+                        : ''
+                    }
+                  >
+                    {scoreMeta.groundingScore}%
+                  </span>
                 </div>
               </div>
             )}
