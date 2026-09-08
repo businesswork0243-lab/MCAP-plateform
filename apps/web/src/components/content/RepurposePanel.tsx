@@ -45,11 +45,11 @@ export default function RepurposePanel({
     setSelectedTarget(targetPlatform);
 
     try {
-      const response = await aiApi.post('/content/repurpose', {
-        contentId,
+      // The endpoint is /content/:id/repurpose and reads only targetPlatform
+      // (plus an optional sourceArtifactId) — it loads the source content
+      // itself. The previous call posted to a path that does not exist.
+      const response = await aiApi.post(`/content/${contentId}/repurpose`, {
         targetPlatform,
-        originalContent,
-        originalPlatform,
       });
 
       const { content } = response.data;

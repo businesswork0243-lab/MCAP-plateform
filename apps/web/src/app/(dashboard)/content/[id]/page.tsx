@@ -11,9 +11,10 @@ import { cn } from '@/lib/utils';
 import {
   ArrowLeft, Copy, Download, RefreshCw, CheckCircle,
   XCircle, BarChart2, AlertTriangle, Lock, Edit3, Sparkles,
-  History, Save, X, Wand2, RotateCcw, Clock, Tag
+  History, Save, X, Wand2, RotateCcw, Clock, Tag, Shuffle
 } from 'lucide-react';
 import { PlatformIcon, getPlatformConfig } from '@/components/platform-icons';
+import RepurposePanel from '@/components/content/RepurposePanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -180,7 +181,7 @@ export default function ContentWorkspacePage() {
   const [copied, setCopied] = useState(false);
 
   // Edit / Refine / History / Modal state
-  const [mode, setMode] = useState<'view' | 'edit' | 'refine' | 'history'>('view');
+  const [mode, setMode] = useState<'view' | 'edit' | 'refine' | 'history' | 'repurpose'>('view');
   const [editedContent, setEditedContent] = useState('');
   const [refinePrompt, setRefinePrompt] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -643,6 +644,7 @@ export default function ContentWorkspacePage() {
               {mode === 'edit' && <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 border-blue-500/30">Editing</Badge>}
               {mode === 'refine' && <Badge variant="secondary" className="bg-purple-500/10 text-purple-600 border-purple-500/30">Refining</Badge>}
               {mode === 'history' && <Badge variant="secondary" className="bg-amber-500/10 text-amber-600 border-amber-500/30">History</Badge>}
+              {mode === 'repurpose' && <Badge variant="secondary" className="bg-teal-500/10 text-teal-600 border-teal-500/30">Repurposing</Badge>}
             </div>
 
             <div className="flex items-center gap-2">
@@ -671,6 +673,15 @@ export default function ContentWorkspacePage() {
                     onClick={() => setMode(mode === 'history' ? 'view' : 'history')}
                   >
                     <History className="w-3.5 h-3.5 mr-1" /> History
+                  </Button>
+
+                  <Button
+                    variant={mode === 'repurpose' ? 'secondary' : 'outline'}
+                    size="sm"
+                    onClick={() => setMode(mode === 'repurpose' ? 'view' : 'repurpose')}
+                    className="text-teal-600 dark:text-teal-400 border-teal-500/30 hover:bg-teal-500/10"
+                  >
+                    <Shuffle className="w-3.5 h-3.5 mr-1" /> Repurpose
                   </Button>
 
                   <Button variant="ghost" size="sm" onClick={copyContent}>
@@ -748,6 +759,18 @@ export default function ContentWorkspacePage() {
             )}
 
             {/* EDIT MODE */}
+            {mode === 'repurpose' && (
+              <RepurposePanel
+                contentId={String(id)}
+                originalContent={activeArtifact?.content ?? ''}
+                originalPlatform={
+                  (typeof activeArtifact?.metadata === 'object' &&
+                    (activeArtifact.metadata as Record<string, unknown>)?.platform as string) ||
+                  'linkedin_post'
+                }
+              />
+            )}
+
             {mode === 'edit' && (
               <div className="space-y-4 max-w-4xl mx-auto">
                 <div className="flex items-center gap-2 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">

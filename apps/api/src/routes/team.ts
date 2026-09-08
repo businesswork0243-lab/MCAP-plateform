@@ -12,6 +12,15 @@ import { generateAccessToken, generateRefreshToken } from '../middleware/auth'
 import { logger } from '../lib/logger'
 
 const router = Router()
+
+// An invited person is not signed in yet, so the two invitation endpoints
+// cannot sit behind authenticate. They were marked "public" in a comment but
+// the blanket middleware below still applied to them, which made an
+// invitation link impossible to accept. Registering this sub-router first
+// lets those two routes through; everything else still falls through to
+// authenticate.
+const publicRoutes = Router()
+router.use(publicRoutes)
 router.use(authenticate)
 export default router
 
@@ -227,7 +236,7 @@ router.delete(
 // ─── GET /api/team/invitations/:token/validate ────────────────────────────────
 // Public — no auth required (pre-accept check)
 
-router.get('/invitations/:token/validate', async (req: AuthenticatedRequest, res: Response) => {
+publicRoutes.get('/invitations/:token/validate', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const invite = await queryOne<{
       id:              string
@@ -283,7 +292,7 @@ router.get('/invitations/:token/validate', async (req: AuthenticatedRequest, res
 
 // ─── POST /api/team/invitations/:token/accept ─────────────────────────────────
 
-router.post('/invitations/:token/accept', async (req: AuthenticatedRequest, res: Response) => {
+publicRoutes.post('/invitations/:token/accept', async (req: AuthenticatedRequest, res: Response) => {
   try {
     // Validate invite token
     const invite = await queryOne<{

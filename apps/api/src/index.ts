@@ -23,6 +23,7 @@ import teamRoutes from './routes/team';
 import campaignRoutes from './routes/campaigns';
 import departmentRoutes from './routes/departments';
 import adminRoutes from './routes/admin';
+import templateRoutes from './routes/templates';
 
 // Services
 import { initWebSocket } from './services/websocket';
@@ -211,6 +212,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/team', teamRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/departments', departmentRoutes);
+app.use('/api/templates', templateRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 
