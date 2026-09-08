@@ -6,7 +6,7 @@ import { useMutation } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Check, ArrowLeft, ArrowRight, Loader2, Building2, Users,
-  Layers, MessageSquare
+  Layers, MessageSquare, XCircle
 } from 'lucide-react';
 import {
   FaLinkedin,
@@ -65,6 +65,7 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<OnboardingData>(DEFAULT_DATA);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const totalSteps = 4;
 
@@ -75,14 +76,19 @@ export default function OnboardingPage() {
       router.push('/dashboard');
     },
     onError: (err: any) => {
-      console.error('Onboarding error:', err);
-      // Non-critical - proceed anyway
-      router.push('/dashboard');
+      // Pushing to the dashboard on failure told people their setup had
+      // saved when it had not. Show what happened and let them retry.
+      setSaveError(
+        err?.response?.data?.error ||
+        err?.message ||
+        'Could not save your setup. Please try again.'
+      );
     },
   });
 
   const updateData = (updates: Partial<OnboardingData>) => {
     setData(prev => ({ ...prev, ...updates }));
+    setSaveError(null);
   };
 
   // An industry is either primary or secondary, never both — selecting it
@@ -455,6 +461,12 @@ export default function OnboardingPage() {
 
           </AnimatePresence>
         </div>
+
+        {saveError && (
+          <p className="flex items-start gap-1.5 mt-4 text-red-400 text-xs">
+            <XCircle size={12} className="shrink-0 mt-0.5" /> {saveError}
+          </p>
+        )}
 
         {/* Navigation */}
         <div className="flex items-center justify-between mt-6">

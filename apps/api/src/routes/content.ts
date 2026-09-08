@@ -1062,6 +1062,7 @@ contentRouter.post(
       );
 
       // ── 7. Version history save karo ──────────────────────────────────────
+      let versionSaved = true;
       try {
         // Previous version number fetch karo
         const prevVersion = await queryOne<{
@@ -1107,7 +1108,9 @@ contentRouter.post(
           ]
         );
       } catch (versionErr) {
-        // Non-critical — version save fail hone pe bhi response do
+        // The re-humanize itself succeeded, so this is not fatal — but the
+        // caller is told, because their version history is now incomplete.
+        versionSaved = false;
         logger.warn('Version history save failed (non-fatal)', {
           error: versionErr instanceof Error ? versionErr.message : versionErr,
         });
@@ -1128,6 +1131,7 @@ contentRouter.post(
         content:     newContent,
         tokensUsed,
         platform,
+        versionSaved,
         diff: {
           summary:       diff.summary,
           changePercent: diff.changePercent,

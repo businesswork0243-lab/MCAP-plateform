@@ -621,8 +621,13 @@ authRouter.post(
             language: d.language,
           },
         })
-        // Don't fail the whole onboarding - return success anyway
-        // User can update these later from settings
+        // This used to swallow the error and return completed: true, so the
+        // user was told their setup saved when nothing was written.
+        res.status(500).json({
+          error: 'Could not save your setup. Please try again.',
+          completed: false,
+        })
+        return
       }
 
       logger.info('Onboarding completed', {
