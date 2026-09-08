@@ -12,7 +12,8 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
-    "db:migrate": "node migrations/run.js"
+    "db:migrate": "node migrations/run.js",
+    "test": "turbo run test"
   },
   "devDependencies": {
     "turbo": "^2.0.0",

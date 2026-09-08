@@ -14,10 +14,40 @@ env:
   IMAGE_PREFIX: ghcr.io/businesswork0243-lab/mcap
 
 jobs:
+  # Tests gate the deploy. Every bug fixed in this repo so far would have
+  # been caught here rather than in production.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - name: API unit tests
+        run: npm run test --workspace=@mcap/api
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: AI engine contract tests
+        working-directory: apps/ai-engine
+        run: |
+          pip install -r requirements.txt pytest
+          python -m pytest tests/ -q
+        env:
+          ANTHROPIC_API_KEY: test-key-not-used
+
   # Building on the EC2 box made every deploy take 10-40 minutes and timed
   # the SSH session out. GitHub's runner is far faster and has a persistent
   # layer cache, so images are built here and the box only pulls them.
   build:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
