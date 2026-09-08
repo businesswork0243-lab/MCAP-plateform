@@ -59,6 +59,7 @@ Return ONLY valid JSON. No markdown, no explanation."""
 class StaticValidatorAgent:
 
     def __init__(self):
+        self._unverified: set[str] = set()
         self.static_rules = get_static_rules()
         self.fn_rules     = get_false_negative_rules()
         self.other_static = [
@@ -81,9 +82,18 @@ class StaticValidatorAgent:
             iteration, len(self.static_rules), len(dynamic_rules),
         )
 
+        # Rules whose verdict this pass could not establish.
+        self._unverified: set[str] = set()
+
         # ── Static: False Negatives FIRST ────────────────────────────────────
         static_violations:   list[RuleViolation] = []
         static_passed_rules: list[str]           = []
+
+        # A regex catches these exactly, and text_cleaner already had the
+        # detector — it was simply never called from here, leaving the
+        # single most-emphasised rule in the system dependent on an LLM.
+        deterministic_fn = self._detect_false_negatives(content)
+        static_violations.extend(deterministic_fn)
 
         fn_v, fn_p = await self._validate_batch(
             content=content,
@@ -189,6 +199,21 @@ class StaticValidatorAgent:
         # Critical failures se block mat karo — regeneration handle karega
         passed = combined_score >= PASS_THRESHOLD
 
+        # A rule nobody could check is not a rule that passed. Without this,
+        # an LLM outage produced score=100 / passed=True on unchecked content.
+        if self._unverified:
+            unverified_ids = sorted(self._unverified)
+            all_critical_failures.append(
+                f"UNVERIFIED:{len(unverified_ids)}_rules_not_checked"
+            )
+            passed = False
+            log.error(
+                "[Validator] %d rule(s) could not be checked (%s) — "
+                "reporting as not passed rather than clean",
+                len(unverified_ids),
+                ", ".join(unverified_ids[:8]),
+            )
+
         # ── Category Breakdown ────────────────────────────────────────────────
         category_breakdown = self._build_category_breakdown(
             all_violations=all_violations,
@@ -286,8 +311,12 @@ Evaluate this content against the rules below.
             return self._parse_response(response, rules)
 
         except Exception as e:
+            # This used to return every rule as passed, so an expired API key,
+            # a rate limit or a provider outage produced a clean 100% score on
+            # content nobody had checked. Unverified is not the same as clean.
             log.error("[Validator] Batch failed: %s", e)
-            return [], [r.id for r in rules]
+            self._unverified.update(r.id for r in rules)
+            return [], []
 
     def _parse_response(
         self,
@@ -332,10 +361,44 @@ Evaluate this content against the rules below.
                     passed_rules.append(rule_id)
 
         except (json.JSONDecodeError, KeyError) as e:
+            # Same fail-open problem: a malformed response is not a pass.
             log.error("[Validator] Parse error: %s", e)
-            passed_rules = [r.id for r in rules]
+            self._unverified.update(r.id for r in rules)
+            violations, passed_rules = [], []
 
         return violations, passed_rules
+
+    def _detect_false_negatives(self, content: str) -> list[RuleViolation]:
+        """Regex pass for contrast negations — runs whether or not an LLM does."""
+        try:
+            from services.text_cleaner import detect_false_negatives
+        except Exception as e:  # pragma: no cover - import guard
+            log.warning("[Validator] false-negative detector unavailable: %s", e)
+            return []
+
+        hits = detect_false_negatives(content) or []
+        if not hits:
+            return []
+
+        fn_rule = next(
+            (r for r in self.fn_rules), None
+        ) or next((r for r in self.static_rules if r.id == "SR000"), None)
+        if fn_rule is None:
+            return []
+
+        log.info("[Validator] regex found %d false negative(s)", len(hits))
+        return [
+            RuleViolation(
+                rule_id=fn_rule.id,
+                rule_name=fn_rule.name,
+                severity=fn_rule.severity,
+                category=fn_rule.category,
+                description=f"Contrast negation: \"{h.get('match', '')}\"",
+                location=h.get("match"),
+                suggestion="State the positive claim directly.",
+            )
+            for h in hits[:10]
+        ]
 
     def _calculate_score(
         self,

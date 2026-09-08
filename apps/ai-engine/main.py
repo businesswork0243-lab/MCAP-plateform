@@ -829,11 +829,60 @@ async def run_full_pipeline(req: FullPipelineRequest):
                 total_tokens += r.get("tokensUsed", 0)
             log.info("✓ [4/5] Humanizer done")
         else:
-            log.info("→ [4/5] Humanizer SKIPPED (disabled)")
-            final_contents = [
-                {"content": r["content"], "tokensUsed": 0, "metadata": {}}
-                for r in brand_results
-            ]
+            # The rule engine lives inside the humanizer, so turning
+            # humanization off silently disabled every quality and grounding
+            # rule too. It is a correctness gate, not a humanization feature,
+            # so run it on its own here.
+            log.info("→ [4/5] Humanizer SKIPPED (disabled) — rule engine still runs")
+
+            async def _rules_only(item: dict, platform: str) -> dict:
+                try:
+                    engine = RuleEngineOrchestrator()
+                    re_result = await engine.process(
+                        content=item["content"],
+                        user_prompt=req.topic,
+                        brand_data=profile_dict or {},
+                        extra_context={
+                            "platform": platform,
+                            "objective": req.objective,
+                        },
+                    )
+                    static_val = re_result.static_validation
+                    return {
+                        "content": re_result.final_content or item["content"],
+                        "tokensUsed": 0,
+                        "metadata": {
+                            "rule_engine": {
+                                "enabled": True,
+                                "final_score": re_result.final_score,
+                                "passed": bool(static_val and static_val.passed),
+                                "iterations": re_result.total_iterations,
+                                "false_negatives_eliminated":
+                                    re_result.false_negatives_eliminated,
+                            }
+                        },
+                    }
+                except Exception as e:
+                    log.error(
+                        "Rule engine (humanizer disabled) failed for %s: %s: %s",
+                        platform, type(e).__name__, e,
+                    )
+                    return {
+                        "content": item["content"],
+                        "tokensUsed": 0,
+                        "metadata": {
+                            "rule_engine": {
+                                "enabled": True,
+                                "error": f"{type(e).__name__}: {str(e)[:200]}",
+                                "passed": False,
+                            }
+                        },
+                    }
+
+            final_contents = await asyncio.gather(*[
+                _rules_only(r, req.targetPlatforms[i])
+                for i, r in enumerate(brand_results)
+            ])
 
         # ── Agent 5: QA (parallel with fallback) ──────────────────────────
         qa_results: list[dict] = []
