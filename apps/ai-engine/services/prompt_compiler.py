@@ -243,8 +243,11 @@ def compile(req: PDLRequest) -> CompiledPromptPackage:
         "word_count":          req.word_count,
         "seo_enabled":         req.seo_enabled,
         "seo_settings":        req.seo_settings,
-        # ✅ NEW: Brand document context canonical writer ko bhi milna chahiye
         "brand_document_context": brand.get("document_context") or "",
+        # The writer previously saw neither of these; they reached only the
+        # brand optimizer and QA, after the draft had already been written.
+        "compliance_notes":    compliance_notes,
+        "preferred_terms":     preferred_terms,
     }
 
     # ── Platform instructions ────────────────────────────────────────────────

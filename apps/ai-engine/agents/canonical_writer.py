@@ -124,23 +124,29 @@ STRUCTURE_FLOWS = {
     "story": {
         "name": "Story",
         "flow": [
-            "1. SITUATION — Set the scene: who, what, when, where",
-            "2. CONFLICT — The challenge, tension, or turning point",
-            "3. LESSON — What was learned or how it was resolved",
-            "4. FRAMEWORK — The transferable principle from the story",
-            "5. BROADER IMPLICATION — Connect to a wider audience or larger trend",
+            # Matches the wizard's Storytelling flow. The scene must come from
+            # the verified profile or context; with none, tell the story of
+            # the problem or an industry pattern, never an invented personal one.
+            "1. SCENE SETTING — Who, what, when, where. Use a real situation from the verified profile or context; otherwise describe a situation in the industry, not one the author lived.",
+            "2. CHALLENGE / CONFLICT — The tension or turning point",
+            "3. JOURNEY — How the situation developed and what was tried",
+            "4. RESOLUTION — How it was resolved or what changed",
+            "5. TAKEAWAY — The transferable principle for the reader",
         ],
         "ideal_for": "Founder content, personal branding, case studies",
     },
+    # Must match the flow the content wizard shows the user for "Thesis":
+    # Hook → Thesis Statement → Supporting Arguments → Evidence → Conclusion.
+    # The engine previously wrote a different six-beat flow, so reviewers
+    # judging against the advertised framework found it "blended together".
     "thesis": {
         "name": "Thesis",
         "flow": [
-            "1. STRUCTURAL CLAIM — A precise, defensible thesis about how a system works",
-            "2. PREVAILING ASSUMPTION — The dominant belief your thesis challenges",
-            "3. FAILURE MODE — Where and why the prevailing assumption breaks down",
-            "4. UNDERLYING MECHANICS — Root cause or mechanism driving the failure",
-            "5. SECOND-ORDER EFFECTS — Downstream consequences most people overlook",
-            "6. STRATEGIC IMPLICATION — What decision-makers should do differently",
+            "1. HOOK — A concrete situation or tension that makes the reader need the answer. Do NOT open with the thesis itself.",
+            "2. THESIS STATEMENT — One clear, defensible position, stated explicitly in its own sentence or two.",
+            "3. SUPPORTING ARGUMENTS — Two to four DISTINCT arguments. Each must add a new reason; do not restate one argument several ways.",
+            "4. EVIDENCE — For each argument, verifiable support: a documented case, a named standard or regulation, published research, data, or a fact from the verified profile. A hypothetical scenario is an ILLUSTRATION, not evidence — if you use one, introduce it as hypothetical ('Consider a bank that...'). If no verifiable evidence exists for a point, say so plainly rather than dressing an example up as proof.",
+            "5. CONCLUSION — Return to the thesis once and state the strategic implication. One conclusion, not several overlapping ones.",
         ],
         "ideal_for": "Governance, economics, regulation, capital markets",
     },
@@ -303,6 +309,9 @@ EXECUTION RULES:
 - Include the CTA naturally in the conclusion
 - Every claim about the author must trace to the verified profile
 - Where verified material runs out, write analysis rather than anecdote
+- Keep examples and evidence distinct: an example illustrates a point, evidence
+  proves it. Never present a hypothetical as proof, and never claim something
+  "exists today" or "is happening" without naming what or where
 
 Write the full article now:"""
 
@@ -330,6 +339,8 @@ async def run(
     tonality_spectrum:     dict | None      = None,
     brand_document_context: str             = "",
     verified_profile_facts: str             = "",
+    compliance_notes:      str              = "",
+    preferred_terms:       list[str] | None = None,
 ) -> dict:
 
     if custom_structure_flow and len(custom_structure_flow) > 0:
@@ -420,6 +431,26 @@ claims about their experience, role, employer, projects or history.
 Write in an analytical, educational register about the subject itself.
 Do not construct a persona to carry the argument.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+
+    # ── Brand compliance rules ──
+    # Rules such as "keep claims tied to actual experience" or "use exact
+    # paper titles" govern what the draft may say. They used to reach only the
+    # brand optimizer and QA — after the draft was written — where they could
+    # polish wording but not change what had been claimed.
+    rules_parts = []
+    if compliance_notes and compliance_notes.strip():
+        rules_parts.append(
+            "BRAND COMPLIANCE RULES (binding — follow every one):\n"
+            + compliance_notes.strip()[:3000]
+        )
+    terms = [t.strip() for t in (preferred_terms or []) if isinstance(t, str) and t.strip()]
+    if terms:
+        rules_parts.append(
+            "PREFERRED TERMINOLOGY (use these exact terms where relevant): "
+            + ", ".join(terms[:30])
+        )
+    if rules_parts:
+        grounding_block += "\n\n" + "\n\n".join(rules_parts)
 
     user_prompt = USER_TEMPLATE.format(
         topic=topic,

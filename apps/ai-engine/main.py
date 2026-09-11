@@ -672,6 +672,8 @@ async def run_full_pipeline(req: FullPipelineRequest):
                 tonality_spectrum=ci.get("tonality_spectrum") or {},
                 brand_document_context=ci.get("brand_document_context", ""),
                 verified_profile_facts=_build_verified_facts(profile_dict),
+                compliance_notes=ci.get("compliance_notes", ""),
+                preferred_terms=ci.get("preferred_terms") or [],
             )
         except Exception as e:
             log.error("Canonical writer FAILED: %s\n%s", e, traceback.format_exc())

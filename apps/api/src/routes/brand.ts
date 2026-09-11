@@ -3,7 +3,18 @@ import { Router, Response } from 'express'
 import { v4 as uuidv4 } from 'uuid'
 import { z } from 'zod'
 import multer from 'multer'
-import pdfParse = require('pdf-parse')
+import pdfParseModule = require('pdf-parse')
+
+// The installed pdf-parse is 2.x, which exports a PDFParse class, but
+// moduleResolution "node" resolves types from @types/pdf-parse (1.x), which
+// describes a callable default export. Declare the shape actually shipped.
+type PdfParser = {
+  getText(): Promise<{ text: string }>
+  destroy(): Promise<void>
+}
+const { PDFParse } = pdfParseModule as unknown as {
+  PDFParse: new (options: { data: Uint8Array }) => PdfParser
+}
 import mammoth from 'mammoth'
 import { query, queryOne, withTransaction } from '../db/connection'
 import { AuthenticatedRequest, authenticate } from '../middleware/auth'
@@ -394,7 +405,7 @@ brandRouter.delete('/:id', async (req: AuthenticatedRequest, res: Response): Pro
 
 // ─── Document Text Extractor ──────────────────────────────────────────────────
 
-async function extractTextFromBuffer(
+export async function extractTextFromBuffer(
   buffer: Buffer,
   mimeType: string,
   fileName: string
@@ -403,10 +414,20 @@ async function extractTextFromBuffer(
   try {
     // PDF
     if (mimeType === 'application/pdf') {
-      const data = await (pdfParse as any)(buffer)
-      return {
-        text: data.text.trim(),
-        method: 'pdf-parse',
+      // pdf-parse 2.x exports a PDFParse class, not a function. The old
+      // v1-style call threw "pdfParse is not a function", which the catch
+      // below turned into empty text — so every PDF ever uploaded was stored
+      // as "No text found" and never reached the AI.
+      const parser = new PDFParse({ data: new Uint8Array(buffer) })
+      try {
+        const result = await parser.getText()
+        return {
+          // v2 appends "-- 1 of N --" page markers; they are noise to the AI.
+          text: result.text.replace(/^--\s*\d+\s+of\s+\d+\s*--$/gm, '').trim(),
+          method: 'pdf-parse',
+        }
+      } finally {
+        await parser.destroy()
       }
     }
 
