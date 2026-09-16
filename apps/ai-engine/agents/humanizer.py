@@ -293,10 +293,11 @@ def _build_user_prompt(
         p for p in BANNED_PHRASES if p.lower() not in seen
     ]
 
-    # Cap the generic tail only — every brand phrase is always shown.
-    max_generic = max(0, 30 - len(brand_banned))
-    shown = brand_banned + all_banned[len(brand_banned):][:max_generic]
-    banned_block = "\n".join(f"  • {p}" for p in shown)
+    # Show the whole list. An earlier cap of 30 kept 12 built-ins — Leverage,
+    # Seamless, Cutting-edge, Delve into among them — out of the prompt, and
+    # they duly appeared in output. These are short phrases; the prompt cost
+    # of listing all of them is negligible next to letting them through.
+    banned_block = "\n".join(f"  • {p}" for p in all_banned)
 
     return f"""{intensity_block}
 LANGUAGE: {lang_note}

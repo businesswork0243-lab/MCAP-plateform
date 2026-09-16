@@ -49,10 +49,17 @@ def test_brand_phrases_survive_a_long_brand_list():
     assert not missing, f"{len(missing)} brand phrases were truncated away"
 
 
-def test_generic_phrases_still_appear():
+def test_every_builtin_phrase_reaches_the_prompt():
+    """A cap of 30 kept 12 built-ins out, and they showed up in output."""
     prompt = build(brand_phrases=["game-changer"])
-    shown = [p for p in BANNED_PHRASES if p in prompt]
-    assert len(shown) >= 10, "the built-in list should still guide the model"
+    missing = [p for p in BANNED_PHRASES if p not in prompt]
+    assert not missing, f"built-in banned phrases never shown: {missing}"
+
+
+def test_builtins_survive_alongside_a_brand_list():
+    prompt = build(brand_phrases=[f"brand-term-{i}" for i in range(20)])
+    missing = [p for p in BANNED_PHRASES if p not in prompt]
+    assert not missing, f"brand list pushed built-ins out: {missing}"
 
 
 def test_no_brand_list_still_produces_a_prompt():
