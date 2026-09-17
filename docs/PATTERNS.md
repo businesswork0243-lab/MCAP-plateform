@@ -66,3 +66,15 @@ later for the structure-scoring method in P5. Its 304 features are built for
 | Pattern 25, writing about the previous version | Omitted | Too many false positives on release notes and changelogs, which our users write |
 | Prose guidance for a human editor | Regex detectors returning spans | A rewriting model needs the offending sentence, not a category name |
 | "weak alone" as advice | `solo_threshold` per pattern | Made explicit: a weak pattern counts when it clears its own threshold or when two different weak patterns appear together |
+| StoryScope's 15 closed questions, scored by a model | Six behaviours read by regex in `services/structure.py` | One scoring call per piece is real money and 40 seconds of latency. These six are the contrasts with the largest AI/human gap and the only ones readable without a model |
+| StoryScope's trained classifier | Nothing equivalent | Theirs learned thresholds from 61,608 stories. Ours are judgement, so the score is advisory and says so |
+
+## Where each piece lives
+
+| File | What it holds |
+|---|---|
+| `apps/ai-engine/services/tells.py` | The 22 detectors and the weak-alone rule |
+| `apps/ai-engine/services/voice.py` | Rhythm measured from a brand's own document |
+| `apps/ai-engine/services/structure.py` | The six structural behaviours, advisory score |
+| `apps/ai-engine/agents/rule_engine/rules/tell_rules.py` | `SR017`–`SR038`, one per pattern, and the fix text |
+| `apps/ai-engine/scripts/tell_score.py` | Corpus density, and the CI gate |

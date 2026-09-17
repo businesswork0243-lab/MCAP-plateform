@@ -1,7 +1,10 @@
 # M-CAP Anti-Slop: Gap Analysis and What Changes After Implementation
 
-**Status:** proposal, awaiting approval. No code has been changed for this document.
-**Date:** 16 September 2026
+**Status:** implemented, 17 September 2026. P1–P5 are in `main`. The four open
+decisions at the end were resolved as recorded there; three followed this
+document's own recommendation and one (the structure score) was built without
+the LLM call it assumed.
+**Date:** 16 September 2026 (plan), 17 September 2026 (implementation)
 **Sources read in full:** Wikipedia "Signs of AI writing" (raw wikitext, 1,928 lines, 106
 sections); `blader/humanizer` SKILL.md + README.md (MIT); StoryScope, COLM 2026
 (Russell, Rajendhran, Pham, Iyyer, Wieting).
@@ -288,15 +291,46 @@ exists, which is why it is built first.
 P1 and P2 together (~6 days) close most of the pattern gap and work during outages. P4
 and P5 are the larger bets.
 
-### Decisions needed before starting
+### Decisions, as resolved on 17 September 2026
 
-1. Does the structure score ever block a piece, or only warn? *Recommendation: warn only,
-   at least for the first month.*
-2. Whose voice is the target when a brand has no document — require one, fall back to
-   generic rules, or let the user paste 2–3 paragraphs directly?
-3. Is ~19 days the right size, or do we ship P1+P2 first and re-decide?
-4. Who supplies the human-written reference posts for the evaluation corpus? Without them
-   we can measure change, but not direction.
+1. **Does the structure score ever block a piece, or only warn?** Warn only. It is
+   reported as `writingScore` with zero weight in `SCORE_WEIGHTS` and no path to
+   `passed`. Giving it weight would also have silently restated every score already in
+   the database. A test pins this: `test_writing_score_is_absent_from_the_qa_weights`.
+
+2. **Whose voice is the target when a brand has no document?** Fall back to generic
+   rules. `voice.measure` returns `None` below 150 words or 8 sentences and the writer
+   simply gets no rhythm block, which is honest. A target derived from four sentences
+   would read as authoritative and be noise. Letting the user paste a sample is the
+   obvious next step and was not built.
+
+3. **Is ~19 days the right size?** Overtaken. All five phases landed together because
+   P3–P5 turned out to be wiring rather than new machinery once the detectors existed.
+
+4. **Who supplies the human-written reference posts?** Still open. `eval/corpus/human/`
+   is empty, so the baseline answers "are we getting worse" and not "are we getting
+   closer to how these people write". This is the one gap that needs a person.
+
+### What was built differently from this plan
+
+- **The structure score runs no LLM call.** Appendix B assumed one scoring call per
+  piece. Six of the fifteen questions turned out to be readable with regex — the six
+  with the largest AI/human gap — so `services/structure.py` is deterministic, free and
+  works during an outage like everything else in this chain. The trade is that its
+  thresholds are judgement rather than learned, which is why it stays advisory.
+
+- **The voice profile is measured at generation time, not cached in a column.** The plan
+  proposed `brand_profiles.voice_profile` (JSONB), written on upload. Measuring is pure
+  arithmetic over text and takes microseconds, so a column would have bought nothing and
+  cost a migration plus a cache to invalidate.
+
+- **The tell rules cost no extra calls.** `SR017`–`SR038` are marked `deterministic` and
+  excluded from the validator's LLM batches. The seventeen rules that existed before are
+  still the only ones that cost anything.
+
+- **A draft is compared to a brand document on a lower bar than the document itself.**
+  `DRAFT_MIN_WORDS` is 80 against the document's 150. At the document's threshold the
+  voice match was `None` on nearly every real LinkedIn post — a feature that never fires.
 
 ---
 

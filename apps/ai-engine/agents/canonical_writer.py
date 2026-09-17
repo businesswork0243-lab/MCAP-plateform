@@ -1,6 +1,10 @@
 # apps/ai-engine/agents/canonical_writer.py
 """Agent 1 — Canonical Writer: generates the authoritative base document."""
+import logging
+
 from services.llm import complete
+
+log = logging.getLogger("ai-engine.canonical_writer")
 
 SYSTEM = """You are an expert content strategist and senior writer.
 Your task: produce a comprehensive, publication-ready canonical article.
@@ -262,6 +266,8 @@ CALL TO ACTION: {cta}
 
 {brand_doc_block}
 
+{voice_block}
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WRITING STRUCTURE: {structure_name}
 {structure_purpose}
@@ -392,9 +398,32 @@ BRAND DOCUMENT GUIDELINES (Base Voice):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {trimmed_docs}
 
-Ensure the canonical draft fundamentally aligns with this brand's voice, 
+Ensure the canonical draft fundamentally aligns with this brand's voice,
 vocabulary, and strategic constraints from the very first draft.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+
+    # ── Measured Voice Block ──
+    # The document above tells the writer what this brand says. This says how
+    # they say it, as numbers taken from that same document. "Vary sentence
+    # rhythm" is advice every brand received identically; "sentences average
+    # nine words and 42% are under eight" is a target.
+    #
+    # Absent or too short a document, there is no block. Generic guidance is
+    # honest; a rhythm derived from four sentences would not be.
+    voice_block = ""
+    try:
+        from services.voice import measure, describe
+        voice_profile = measure(brand_document_context)
+        described = describe(voice_profile)
+        if described:
+            voice_block = f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{described}
+
+Write to this rhythm. It is a centre of gravity, not a rule for every line —
+this piece has its own length and platform.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+    except Exception as e:  # pragma: no cover - measurement must never block
+        log.warning("Voice measurement unavailable (non-fatal): %s", e)
 
     # ── Grounding Block ──
     # Names the only permissible source of first-person claims. Without a
@@ -467,6 +496,7 @@ Do not construct a persona to carry the argument.
         perspective_voice=pv,
         cta=cta or "No specific CTA required.",
         brand_doc_block=brand_doc_block,
+        voice_block=voice_block,
         grounding_block=grounding_block,
         structure_name=structure_name,
         structure_purpose=structure_purpose,

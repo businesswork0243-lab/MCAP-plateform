@@ -449,8 +449,29 @@ STATIC_RULES: list[Rule] = [
 ]
 
 
+# ══════════════════════════════════════════════════════════════════════
+# PRIORITY 7 — WRITING TELLS (deterministic, no LLM call)
+# ══════════════════════════════════════════════════════════════════════
+# SR017-SR038 are defined in tell_rules.py and appended here so that every
+# helper below — scoring, totals, category breakdown — counts them without
+# needing to know they are regex-backed. The validator tells them apart by
+# rule.deterministic, not by id range.
+from .tell_rules import get_tell_rules  # noqa: E402
+
+STATIC_RULES.extend(get_tell_rules())
+
+
 def get_static_rules() -> list[Rule]:
     return STATIC_RULES
+
+
+def get_deterministic_rules() -> list[Rule]:
+    """Rules a regex decides — never sent to the LLM."""
+    return [r for r in STATIC_RULES if r.deterministic]
+
+
+def get_llm_judged_rules() -> list[Rule]:
+    return [r for r in STATIC_RULES if not r.deterministic]
 
 
 def get_false_negative_rules() -> list[Rule]:

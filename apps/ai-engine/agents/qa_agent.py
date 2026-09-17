@@ -385,9 +385,32 @@ async def run(
     # ── Pass/fail determination ───────────────────────────────────────────────
     passed = _determine_pass(overall, scores, all_flags)
 
+    # ── Writing report (advisory, no LLM, no weight) ──────────────────────────
+    # Deliberately kept out of `overall` and out of `passed`. Grounding blocks
+    # because it is about truth; this is about taste, and the doc's own
+    # recommendation was to warn rather than block. Adding weight here would
+    # also silently restate every score already in the database.
+    writing_report = None
+    voice_report = None
+    try:
+        from services.structure import score as structure_score
+        writing_report = structure_score(content)
+    except Exception as e:  # pragma: no cover - reporting must not fail a run
+        log.warning("Writing report unavailable (non-fatal): %s", e)
+
+    try:
+        from services.voice import measure, distance
+        brand_voice = measure(profile_facts)
+        voice_report = distance(brand_voice, content)
+    except Exception as e:  # pragma: no cover
+        log.warning("Voice match unavailable (non-fatal): %s", e)
+
     log.info(
-        "QA complete | overall=%d | passed=%s | flags=%d | tokens=%d",
+        "QA complete | overall=%d | passed=%s | flags=%d | tokens=%d | "
+        "writing=%s | voice_match=%s",
         overall, passed, len(all_flags), tokens,
+        (writing_report or {}).get("score"),
+        (voice_report or {}).get("match"),
     )
 
     return {
@@ -405,6 +428,15 @@ async def run(
         # Composite
         "overallScore":      overall,
         "passed":            passed,
+        # Advisory. `writingScore` is the structural reading and `voiceMatch`
+        # is how close the draft sits to the brand's measured rhythm. Neither
+        # is in `overallScore` and neither can fail a piece. Both are null when
+        # the text is too short to read, rather than a number that looks
+        # meaningful and is not.
+        "writingScore":      (writing_report or {}).get("score"),
+        "writingReport":     writing_report,
+        "voiceMatch":        (voice_report or {}).get("match"),
+        "voiceReport":       voice_report,
         "flags":             all_flags,
         "suggestions":       scores.get("suggestions", []),
         "summary":           scores.get("summary", ""),

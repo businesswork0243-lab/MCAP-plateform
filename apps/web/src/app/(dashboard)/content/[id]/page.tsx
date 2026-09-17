@@ -528,6 +528,29 @@ export default function ContentWorkspacePage() {
   const pick = (snake: string, camel: string) =>
     Number(qaQuality?.[snake] ?? qaDetail?.[camel] ?? qaMetadata?.[camel] ?? 0);
 
+  // The advisory scores are absent whenever a piece is too short to read
+  // structurally, and that is a real answer. Running them through `pick`
+  // would turn "not measured" into a red 0%, which is the one thing these
+  // fields must never say.
+  const pickOptional = (camel: string): number | null => {
+    const raw = qaQuality?.[camel] ?? qaDetail?.[camel] ?? qaMetadata?.[camel];
+    if (raw === null || raw === undefined || raw === '') return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const writingScore = pickOptional('writingScore');
+  const voiceMatch = pickOptional('voiceMatch');
+
+  // Why the writing score came out where it did. The number alone tells an
+  // editor nothing they can act on.
+  const writingReasons = (() => {
+    const report = (qaDetail?.writingReport ?? qaMetadata?.writingReport) as
+      | { reasons?: unknown }
+      | undefined;
+    return Array.isArray(report?.reasons) ? (report.reasons as string[]) : [];
+  })();
+
   const scoreMeta = {
     brandScore:        pick('brand',        'brandScore'),
     readabilityScore:  pick('readability',  'readabilityScore'),
@@ -1171,6 +1194,52 @@ export default function ContentWorkspacePage() {
               </div>
             )}
           </div>
+
+          {/* Writing quality — advisory, never a gate.
+              Grounding blocks a piece because grounding is about truth.
+              These are about taste, so they report and leave the call to
+              the editor. Both are hidden when the piece was too short to
+              measure rather than shown as zero. */}
+          {(writingScore !== null || voiceMatch !== null) && (
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
+                Writing Quality
+              </h3>
+              <div className="space-y-2 text-sm">
+                {writingScore !== null && (
+                  <div className="flex justify-between items-center py-1 border-b">
+                    <span className="text-muted-foreground">Structure</span>
+                    <span className={writingScore < 60 ? 'text-yellow-600 dark:text-yellow-400 font-semibold' : ''}>
+                      {writingScore}%
+                    </span>
+                  </div>
+                )}
+                {voiceMatch !== null && (
+                  <div className="flex justify-between items-center py-1 border-b">
+                    <span className="text-muted-foreground">Voice Match</span>
+                    <span className={voiceMatch < 60 ? 'text-yellow-600 dark:text-yellow-400 font-semibold' : ''}>
+                      {voiceMatch}%
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {writingReasons.length > 0 && (
+                <div className="space-y-1.5 mt-3">
+                  {writingReasons.map((reason: string, i: number) => (
+                    <div key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                      <span className="shrink-0 mt-0.5">•</span>
+                      <span>{reason}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-[11px] text-muted-foreground mt-3">
+                Advisory only — these never block publishing.
+              </p>
+            </div>
+          )}
 
           {/* QA Flags */}
           {qaFlags.length > 0 && (

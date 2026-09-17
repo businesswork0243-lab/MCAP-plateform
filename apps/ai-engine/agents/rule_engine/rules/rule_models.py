@@ -50,6 +50,11 @@ class Rule(BaseModel):
     weight:      float
     examples:    Optional[dict] = None
 
+    # True when a regex decides the verdict and no LLM call is needed. The
+    # validator keeps these out of its batches, so they cost nothing and still
+    # report when the provider is down.
+    deterministic: bool = False
+
 
 class RuleViolation(BaseModel):
     rule_id:     str

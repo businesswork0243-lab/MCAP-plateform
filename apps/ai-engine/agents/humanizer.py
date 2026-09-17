@@ -178,12 +178,13 @@ def normalize_tonality(tone: dict | None) -> dict:
 
 
 def _build_user_prompt(
-    content:       str,
-    intensity:     str,
-    tonality:      dict | None,
-    language:      str,
-    brand_phrases: list | None,
-    pre_issues:    dict,
+    content:        str,
+    intensity:      str,
+    tonality:       dict | None,
+    language:       str,
+    brand_phrases:  list | None,
+    pre_issues:     dict,
+    brand_document: str = "",
 ) -> str:
 
     config = INTENSITY_CONFIG.get(intensity, INTENSITY_CONFIG["medium"])
@@ -299,9 +300,36 @@ def _build_user_prompt(
     # of listing all of them is negligible next to letting them through.
     banned_block = "\n".join(f"  • {p}" for p in all_banned)
 
+    # ── Structural tells, quoted ──────────────────────────────────────────────
+    # The banned-phrase list above is vocabulary, which every model release
+    # retires. These are the structural habits, and they are handed over as the
+    # exact offending sentences: a model told "you used a forced triad" guesses
+    # which one, a model shown the triad fixes it.
+    tells_block = ""
+    try:
+        from services.tells import format_for_prompt
+        found = format_for_prompt(content)
+        if found:
+            tells_block = f"\n━━━ WRITING PATTERNS FOUND (rewrite each) ━━━\n{found}\n"
+    except Exception as e:  # pragma: no cover - detector must never block a run
+        log.warning("Tell detection unavailable (non-fatal): %s", e)
+
+    # ── The brand's measured rhythm ───────────────────────────────────────────
+    # A humanizer told only "vary sentence rhythm" moves every brand toward the
+    # same middle. Given the brand's own document, it has their numbers instead.
+    voice_block = ""
+    try:
+        from services.voice import measure, describe
+        described = describe(measure(brand_document))
+        if described:
+            voice_block = f"\n━━━ MATCH THIS RHYTHM ━━━\n{described}\n"
+    except Exception as e:  # pragma: no cover - never block a run on this
+        log.warning("Voice measurement unavailable (non-fatal): %s", e)
+
     return f"""{intensity_block}
 LANGUAGE: {lang_note}
 {tonality_block}
+{voice_block}
 
 ━━━ CONTENT ANALYSIS ━━━
 {assessment}
@@ -311,7 +339,7 @@ LANGUAGE: {lang_note}
 
 ━━━ BANNED PHRASES (fix if present) ━━━
 {banned_block}
-
+{tells_block}
 ━━━ CONTENT ━━━
 {content}
 
@@ -379,6 +407,11 @@ async def run(
             language=language,
             brand_phrases=brand_phrases or (brand_data or {}).get("banned_phrases", []),
             pre_issues=pre_issues,
+            brand_document=(
+                (brand_data or {}).get("document_context")
+                or (brand_data or {}).get("doc_context")
+                or ""
+            ),
         )
 
         humanized, tokens = await complete(

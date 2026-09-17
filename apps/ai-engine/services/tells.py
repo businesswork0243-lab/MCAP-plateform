@@ -467,15 +467,63 @@ def tell_report(text: str) -> dict:
 
     per_100 = round(len(effective) / words * 100, 2) if words else 0.0
 
+    # Ordered by position, like `tells`, so a caller can quote them in the
+    # order a reader meets them.
+    effective.sort(key=lambda t: t["start"])
+
     return {
         "tells": tells,
         "counts": counts,
         "strong_count": len(strong),
         "weak_count": len(tells) - len(strong),
+        # The spans that actually counted, and the patterns they belong to.
+        # Callers that raise a violation per tell need exactly this set;
+        # re-deriving it at the call site is how the two drift apart.
+        "effective": effective,
+        "effective_ids": sorted({t["id"] for t in effective}),
         "effective_count": len(effective),
         "words": words,
         "per_100_words": per_100,
     }
+
+
+_SENTENCE_BREAK = re.compile(r"(?<=[.!?:])\s+|\n{2,}")
+
+
+def sentence_at(text: str, index: int, max_len: int = 220) -> str:
+    """The sentence containing `index`, for quoting back to a writer.
+
+    Several detectors match a window around their trigger rather than a whole
+    clause — the dash detector deliberately looks at the characters either side
+    of the dash. Quoting that window verbatim gives a rewrite prompt fragments
+    like "tures, and shard execution—as if the network were a s", which names
+    no sentence the model can find. This widens the span to the sentence the
+    reader would see.
+    """
+    if not text:
+        return ""
+    index = max(0, min(index, len(text) - 1))
+
+    start, end = 0, len(text)
+    for m in _SENTENCE_BREAK.finditer(text):
+        if m.end() <= index:
+            start = m.end()
+        elif m.start() > index:
+            end = m.start()
+            break
+
+    sentence = text[start:end].strip()
+    if len(sentence) <= max_len:
+        return sentence
+
+    # A sentence longer than the cap is usually a list or a run-on. Keep the
+    # part around the hit rather than the first 220 characters of something
+    # else entirely.
+    offset = max(0, index - start - max_len // 2)
+    clipped = sentence[offset:offset + max_len].strip()
+    prefix = "…" if offset > 0 else ""
+    suffix = "…" if offset + max_len < len(sentence) else ""
+    return f"{prefix}{clipped}{suffix}"
 
 
 def format_for_prompt(text: str, limit: int = 12) -> str:
@@ -485,17 +533,18 @@ def format_for_prompt(text: str, limit: int = 12) -> str:
     guesses which one, a model shown the triad fixes it.
     """
     report = tell_report(text)
-    if not report["tells"]:
+    if not report["effective"]:
         return ""
 
     lines = []
     seen: set[tuple[str, str]] = set()
-    for t in report["tells"]:
-        key = (t["id"], t["match"])
+    for t in report["effective"]:
+        quote = sentence_at(text, t["start"])
+        key = (t["id"], quote)
         if key in seen:
             continue
         seen.add(key)
-        lines.append(f'  - {t["name"]}: "{t["match"]}"')
+        lines.append(f'  - {t["name"]}: "{quote}"')
         if len(lines) >= limit:
             break
 

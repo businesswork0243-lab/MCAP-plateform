@@ -8,7 +8,9 @@ from typing import Tuple
 from ..rules.static_rules import (
     get_static_rules,
     get_false_negative_rules,
+    get_deterministic_rules,
 )
+from ..rules.tell_rules import TELL_RULE_IDS, FIXES
 from ..rules.rule_models import (
     ValidationResult, RuleViolation,
     RuleSeverity, RuleCategory, Rule, RuleType,
@@ -25,6 +27,18 @@ PASS_THRESHOLD = 65.0
 # real person. These must fail outright rather than be soft-capped.
 GROUNDING_RULE_IDS = frozenset({"SR014", "SR015", "SR016"})
 GROUNDING_FAIL_CAP = 55.0
+
+# Writing tells deduct score, but only genuinely tell-ridden output is failed
+# outright. The frozen corpus sits at 2.44 effective tells per 100 words, so
+# this fires at roughly two and a half times our own current writing — rare
+# enough that it does not add a regeneration pass to ordinary pieces, which
+# would cost a call and 40 seconds each time.
+TELL_DENSITY_FAIL = 6.0
+TELL_DENSITY_CAP = 64.0   # just under PASS_THRESHOLD, so regeneration runs
+
+# Only this many tell violations are reported per piece. Beyond it the list
+# stops being feedback and starts being noise the rewrite prompt cannot act on.
+MAX_TELL_VIOLATIONS = 12
 
 # ✅ FIX 2: Max iterations 5 → 3
 # Kyun: 5 iterations = bahut slow, 3 kaafi hai
@@ -62,9 +76,16 @@ class StaticValidatorAgent:
         self._unverified: set[str] = set()
         self.static_rules = get_static_rules()
         self.fn_rules     = get_false_negative_rules()
+        self.tell_rules   = get_deterministic_rules()
+        self.tell_rule_map = {r.id: r for r in self.tell_rules}
+        # Deterministic rules are excluded here deliberately. Batching them
+        # to the LLM would add five more calls per validation to re-derive a
+        # verdict regex already has, and the LLM is the less reliable judge of
+        # the two on questions like "is this an em dash".
         self.other_static = [
             r for r in self.static_rules
             if r.category != RuleCategory.FALSE_NEGATIVE
+            and not r.deterministic
         ]
 
     async def validate(
@@ -102,6 +123,11 @@ class StaticValidatorAgent:
         )
         static_violations.extend(fn_v)
         static_passed_rules.extend(fn_p)
+
+        # ── Static: Writing tells (regex, no call) ───────────────────────────
+        tell_violations, tell_passed, tell_density = self._detect_tells(content)
+        static_violations.extend(tell_violations)
+        static_passed_rules.extend(tell_passed)
 
         # ── Static: Other rules ───────────────────────────────────────────────
         for batch in self._make_batches(self.other_static, BATCH_SIZE):
@@ -193,6 +219,17 @@ class StaticValidatorAgent:
             log.warning(
                 "[Validator] Other critical violations: %s → score capped at 78%%",
                 other_critical_failures,
+            )
+
+        # Tells deduct through the ordinary weight path above. The cap is for
+        # the case that deduction handles badly: a piece riddled with them
+        # where no single rule is critical, so nothing would otherwise trigger
+        # a rewrite. It applies after the other caps and never raises a score.
+        if tell_density >= TELL_DENSITY_FAIL:
+            combined_score = min(combined_score, TELL_DENSITY_CAP)
+            log.warning(
+                "[Validator] Tell density %.2f/100w >= %.1f -> score capped at %s%%",
+                tell_density, TELL_DENSITY_FAIL, TELL_DENSITY_CAP,
             )
 
         # ✅ FIX 5: Passed = score >= 65 (threshold)
@@ -399,6 +436,83 @@ Evaluate this content against the rules below.
             )
             for h in hits[:10]
         ]
+
+    def _detect_tells(
+        self,
+        content: str,
+    ) -> Tuple[list[RuleViolation], list[str], float]:
+        """Regex sweep for the 22 writing tells.
+
+        Returns violations, the ids that came back clean, and the effective
+        density. Weak patterns are only counted when `tells.tell_report` says
+        they earned it — a lone em dash is a writing choice, and failing it
+        would punish exactly the technical writing our users produce most.
+        """
+        try:
+            from services.tells import tell_report, sentence_at
+        except Exception as e:  # pragma: no cover - import guard
+            log.warning("[Validator] tell detectors unavailable: %s", e)
+            # Unlike the LLM path, nothing here is claimed as passed: these
+            # ids simply go unreported rather than being marked clean.
+            return [], [], 0.0
+
+        try:
+            report = tell_report(content)
+        except Exception as e:
+            log.error("[Validator] tell sweep failed: %s", e)
+            return [], [], 0.0
+
+        violations: list[RuleViolation] = []
+        seen: set[tuple[str, str]] = set()
+
+        # `effective` is the set that counted toward the density, weak-alone
+        # rule already applied. Recomputing it here is how the violation list
+        # and the score drift apart, so it is taken as given.
+        for tell in report.get("effective", []):
+            pid = tell["id"]
+            rule_id = TELL_RULE_IDS.get(pid)
+            rule = self.tell_rule_map.get(rule_id) if rule_id else None
+            if rule is None:
+                continue
+
+            # The sentence, not the raw match: several detectors match a
+            # window around their trigger, and a half-word fragment is not
+            # something a rewrite prompt or the content page can act on.
+            quote = sentence_at(content, tell["start"])
+
+            # One violation per distinct sentence. The same dash quoted nine
+            # times tells the rewrite prompt nothing the first mention did not.
+            key = (pid, quote)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            violations.append(RuleViolation(
+                rule_id=rule.id,
+                rule_name=rule.name,
+                severity=rule.severity,
+                category=rule.category,
+                description=f'{rule.name}: "{quote}"',
+                location=quote,
+                suggestion=FIXES.get(pid, rule.instruction),
+            ))
+            if len(violations) >= MAX_TELL_VIOLATIONS:
+                break
+
+        violated_rule_ids = {v.rule_id for v in violations}
+        passed_ids = [
+            r.id for r in self.tell_rules if r.id not in violated_rule_ids
+        ]
+
+        density = float(report.get("per_100_words", 0.0))
+        if violations:
+            log.info(
+                "[Validator] %d tell violation(s) across %d pattern(s), "
+                "density %.2f/100w",
+                len(violations), len(violated_rule_ids), density,
+            )
+
+        return violations, passed_ids, density
 
     def _calculate_score(
         self,

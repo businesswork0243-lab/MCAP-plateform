@@ -21,6 +21,11 @@ const DIMENSIONS: ReadonlyArray<readonly [string, string]> = [
   ['structure',    'structureScore'],
   ['consistency',  'consistencyScore'],
   ['grounding',    'groundingScore'],
+  // Advisory. These are absent on pieces too short to measure, and the loop
+  // below skips anything that is not a finite number, so they are simply
+  // missing from the row rather than stored as zero.
+  ['writing',      'writingScore'],
+  ['voice_match',  'voiceMatch'],
 ]
 
 export function toQualityScore(
