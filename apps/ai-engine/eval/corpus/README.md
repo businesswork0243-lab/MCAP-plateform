@@ -14,12 +14,23 @@ python scripts/tell_score.py eval/corpus --check          # what CI runs
 
 ```
 eval/corpus/
-  generated/   real M-CAP output, unedited
-  human/       posts written by people, for direction
+  generated/   real M-CAP output, unedited  — drives the baseline and the gate
+  human/       posts written by people      — the direction, never the gate
   baseline.json
 ```
 
-## Rules for adding a sample
+## The two sides are scored apart, deliberately
+
+Only `generated/` moves the baseline and `--check`. Human writing carries fewer
+tells, so pooling the two would pull the average down and let a real regression
+in our own output pass — filling in the human corpus would have quietly
+disarmed the gate that the corpus exists to feed.
+
+`human/` answers the other question. `generated/` tells us whether we are
+getting worse. `human/` tells us whether we are getting closer to how the
+people we write for actually write. The report prints the gap between them.
+
+## Rules for adding a generated sample
 
 - **Unedited.** Paste exactly what the pipeline produced. Cleaning it up first
   defeats the purpose.
@@ -29,11 +40,12 @@ eval/corpus/
   the corpus. If a sample is no longer representative, delete it and say so in
   the commit.
 
-## `human/` is deliberately thin
+## Adding a human sample
 
-Measuring our own output against itself shows change but not direction. To know
-whether we are moving toward how these people actually write, the corpus needs
-their real posts: 10 to 15 pieces, ideally from the same brands we generate for.
+See `human/README.md`. The short version: it has to be something a person
+actually wrote and published, pasted unchanged, with its source recorded. A
+model's output filed there would set the target to a model's writing, and every
+later comparison would look healthy while measuring nothing.
 
-Until those land, treat the baseline as "are we getting worse" rather than
-"are we getting closer to human".
+The scorer rejects samples carrying chatbot residue and CI fails on them, which
+catches the careless case but not a careful one.
