@@ -1,0 +1,48 @@
+{
+  "files": 3,
+  "words": 491,
+  "effective_tells": 12,
+  "tells_per_100_words": 2.444,
+  "by_pattern": {
+    "TELL06": 5,
+    "TELL08": 7
+  },
+  "per_file": [
+    {
+      "file": "generated/beginner-react-story-linkedin.txt",
+      "words": 194,
+      "effective": 3,
+      "strong": 0,
+      "weak": 3,
+      "per_100_words": 1.55,
+      "patterns": [
+        "TELL06",
+        "TELL08"
+      ]
+    },
+    {
+      "file": "generated/blockchain-scalability-thesis-linkedin.txt",
+      "words": 119,
+      "effective": 5,
+      "strong": 0,
+      "weak": 5,
+      "per_100_words": 4.2,
+      "patterns": [
+        "TELL06",
+        "TELL08"
+      ]
+    },
+    {
+      "file": "generated/institutional-authority-thesis-linkedin.txt",
+      "words": 178,
+      "effective": 4,
+      "strong": 0,
+      "weak": 4,
+      "per_100_words": 2.25,
+      "patterns": [
+        "TELL06",
+        "TELL08"
+      ]
+    }
+  ]
+}

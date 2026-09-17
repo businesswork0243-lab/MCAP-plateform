@@ -1,0 +1,22 @@
+---
+source: full pipeline run during grounding verification, 2026-09-11
+brand: Aarav Sharma (junior developer, deliberately thin profile)
+structure: story
+platform: linkedin_post
+qa: overall 87, grounding 85, passed false (QA flagged detail beyond the profile)
+note: captured mid-draft; kept because it is the beginner case
+---
+
+I learned more from three React projects nobody uses than from any tutorial I've finished.
+
+Many new developers start with personal projects before touching production code. Six months into a first internship at a small product studio, a typical junior's React experience still comes from three personal projects: a to-do app, a weather dashboard, and a portfolio site.
+
+None of them are in production. That constraint turned out to be the most useful thing about them.
+
+Lesson 1: Start Small
+
+A common first to-do app has one giant component holding all the state. State is the data that changes over time in your app, like the current filter selection. Adding a filter breaks the list. The fix is mundane — split the component, lift the state, pass props deliberately. What stays with you is why it matters: tangled code slows the next change, and in a business, slow changes cost money.
+
+Lesson 2: Handle Failure
+
+The weather dashboard surfaced a different problem. I treated API data as if it always arrived. Slow networks, missing fields, failed requests — my app assumed none of it. Handling loading and error states doubled the work and halved the frustration.

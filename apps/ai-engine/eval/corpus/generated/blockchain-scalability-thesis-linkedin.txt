@@ -1,0 +1,20 @@
+---
+source: full pipeline run during verification, 2026-09-08
+brand: Cubane (Web3 infrastructure)
+structure: thesis
+platform: linkedin_post
+qa: overall 91, grounding 100, rule engine 100, passed
+note: captured mid-draft; this is the opening, not the whole piece
+---
+
+Blockchain scalability has a measurement problem.
+
+Most teams benchmark throughput in transactions per second. They optimize consensus efficiency, compress signatures, and shard execution—as if the network were a single machine.
+
+But the binding constraint lives elsewhere.
+
+State growth—the expanding ledger of accounts, contract storage, and historical data every node must maintain—determines what a blockchain can actually become. A chain can process a thousand transactions per second on paper while its node operators quietly fall behind on disk I/O, memory pressure, and sync times.
+
+The failure mode appears in the operator layer.
+
+Every transaction writes to state, and state accumulates with every block. Verification stays cheap only while a node can hold what it must check.

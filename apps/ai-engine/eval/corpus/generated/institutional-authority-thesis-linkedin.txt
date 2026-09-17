@@ -1,0 +1,24 @@
+---
+source: full pipeline run during grounding verification, 2026-09-11
+brand: Jay Smith (detailed profile, brand document supplied)
+structure: thesis
+platform: linkedin_post
+qa: overall 92, grounding 100, passed
+note: captured mid-draft; the strongest output we have on file
+---
+
+A pension fund settles a bond trade on a public chain. The authority to approve that settlement lives somewhere else entirely.
+
+That gap is where institutional blockchain programmes quietly stall.
+
+The thesis: institutional authority and the execution network are two separate systems. Institutions that treat them as one will build governance they cannot audit and execution they cannot move.
+
+Three reasons this matters.
+
+Durability. Execution networks come and go. Chains fork, merge, deprecate, get replaced. An institution's authority to act — who may bind it, under what conditions, with what revocation rights — must outlast any single network.
+
+Auditability. The Verifiability Rule holds that a system's trustworthiness depends on whether its claims can be independently checked. Authority recorded inside a smart contract is checkable only by reading that chain.
+
+Operational reality. Treasury, custody, and settlement teams already run on multi-network assumptions. When authority is network-specific, every new chain multiplies approval workflows, key management, and reconciliation.
+
+Consider a bank issuing a payment credential valid across three chains. Revocation happens once, in the authority layer. The chains execute; they do not adjudicate.
