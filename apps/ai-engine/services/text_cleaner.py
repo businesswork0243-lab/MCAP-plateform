@@ -10,7 +10,25 @@ log = logging.getLogger("ai-engine.cleaner")
 
 # ─── False Negative Patterns (CRITICAL) ──────────────────────────────────────
 
+# The contrast move survives any surface edit. Every rule below was written
+# against one memorised shape — pronoun subject, comma join — so swapping the
+# pronoun for a real noun phrase and the comma for a full stop made the whole
+# family stop seeing it. "Washington's tokenization push isn't about
+# technology. It's about debt." scored clean against all fifteen. These three
+# fragments generalise the subject, the contraction and the join.
+_NEG    = r"(?:is|are|was|were)(?:n[’']?t|\s+not)"
+_MID    = r"[^.,;:!?\n]{2,70}"
+_AFFIRM = r"(?:it|this|that|they)(?:[’']s|[’']re|\s+is|\s+are)"
+# A full stop joins the halves as readily as a comma; the old [^,.] class
+# actively forbade crossing the sentence boundary the writer had just moved to.
+_JOIN   = r"\s*[.,;:—–]\s*"
+
 FALSE_NEGATIVE_PATTERNS = [
+    (rf"(?i)\b{_NEG}\s+about\s+{_MID}{_JOIN}{_AFFIRM}\s+"
+     rf"(?:really\s+|actually\s+|ultimately\s+|all\s+)?about\b",
+     "not about X, it's about Y"),
+    (rf"(?i)\b{_NEG}\s+(?:just|merely|only|simply)\s+{_MID}{_JOIN}{_AFFIRM}\s+",
+     "not just X, it's Y"),
     (r"(?i)\b(it'?s|this is|that'?s)\s+not\s+just\b",                              "not just"),
     (r"(?i)\b(it|this|that)\s+isn'?t\s+just\b",                                    "isn't just"),
     (r"(?i)\b(it'?s|this is|that'?s)\s+not\s+merely\b",                            "not merely"),

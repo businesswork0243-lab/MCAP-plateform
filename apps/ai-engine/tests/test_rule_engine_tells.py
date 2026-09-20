@@ -94,8 +94,11 @@ def test_deterministic_rules_never_reach_the_llm():
     assert len(batched) == 17
 
 
-def test_all_twenty_two_patterns_have_a_rule():
-    assert len(get_deterministic_rules()) == len(PATTERNS) == 22
+def test_every_pattern_has_a_rule():
+    # Derived, not hardcoded: the count changed once already when the
+    # social-copy patterns landed, and a literal here fails for the one
+    # reason that is never interesting.
+    assert len(get_deterministic_rules()) == len(PATTERNS)
     assert set(TELL_RULE_IDS) == {p.id for p in PATTERNS}
 
 
@@ -126,7 +129,7 @@ def test_clean_text_produces_no_violations(validator):
     assert violations == []
     assert density == 0.0
     # Every tell rule is reported as passed, not merely absent.
-    assert len(passed) == 22
+    assert len(passed) == len(PATTERNS)
 
 
 def test_a_single_weak_pattern_is_not_a_violation(validator):

@@ -160,8 +160,14 @@ def _find_triads(text: str):
 
 
 def _find_dashes(text: str):
-    """Pattern 8 — em/en dash or ' -- ' used as a connector."""
-    for m in re.finditer(r"\s[—–]\s|\s--\s|\w[—–]\w", text):
+    """Pattern 8 — em/en dash or ' -- ' used as a connector.
+
+    A dash between digits is a range, not a connector. "$1–2 trillion" is
+    standard typography, and quoting it into the rewrite prompt asked the
+    model to replace it with a comma. `[^\\W\\d]` is "word character that is
+    not a digit", so letter-dash-letter still counts.
+    """
+    for m in re.finditer(r"\s[—–]\s|\s--\s|[^\W\d][—–][^\W\d]", text):
         yield m.start(), m.end(), text[max(0, m.start() - 25):m.end() + 25].strip()[:90]
 
 
@@ -207,6 +213,109 @@ def _find_heading_echo(text: str):
             yield m.end(), m.end() + len(sentence), sentence[:90]
 
 
+
+# ─── Document-level structure ─────────────────────────────────────────────────
+# Everything above reads one paragraph at a time, which is correct for prose
+# and blind on a social post. A LinkedIn draft puts one or two sentences in
+# each block, so the evidence these detectors need never accumulates inside a
+# single window: the punchy standalone line is the tell, and splitting it into
+# its own paragraph is what hid it. These read the whole piece instead.
+
+# Short enough that the paragraph exists for rhythm rather than content. Set
+# from the drafts we generate, where the filler blocks run four to ten words
+# and the paragraphs carrying an actual claim run twenty or more.
+_FRAGMENT_PARA_WORDS = 12
+# Two short blocks is pacing. Four or more is the staccato cadence that makes
+# a post read as generated no matter how the sentences are worded.
+_FRAGMENT_PARA_RUN = 4
+
+
+def _find_fragment_paragraphs(text: str):
+    """Pattern 25 — the whole piece built out of one-line paragraphs.
+
+    Reported once for the run, not once per paragraph: the fault is the
+    cadence across the post, and nine separate violations quoting nine short
+    lines tells a rewrite prompt nothing the first one did not.
+    """
+    paras = _paragraphs(text)
+    if len(paras) < _FRAGMENT_PARA_RUN:
+        return
+
+    # A trailing hashtag block is the post's furniture. Counting it as a
+    # fragment inflates both the run and the ratio on every social draft.
+    prose = [
+        (off, block) for off, block in paras
+        if not re.fullmatch(r"(?:#\w+\s*)+", block.strip())
+    ]
+    if len(prose) < _FRAGMENT_PARA_RUN:
+        return
+
+    short = [
+        (off, block) for off, block in prose
+        if 0 < _word_count(block) <= _FRAGMENT_PARA_WORDS
+        and not block.strip().startswith(("#", "-", "*", ">"))
+    ]
+    if len(short) < _FRAGMENT_PARA_RUN:
+        return
+
+    # Only flag when the fragments dominate. A long piece with four short
+    # asides is ordinary writing; a piece that is half fragments is not.
+    if len(short) / len(prose) < 0.4:
+        return
+
+    first_off = short[0][0]
+    last_off, last_block = short[-1]
+    yield first_off, last_off + len(last_block), (
+        f"{len(short)} of {len(paras)} paragraphs are "
+        f"{_FRAGMENT_PARA_WORDS} words or fewer"
+    )
+
+
+def _find_parallel_paragraph_openings(text: str):
+    """Pattern 7, read across paragraphs rather than inside one.
+
+    `_find_repeated_openings` resets its run counter at every blank line, so
+    three consecutive one-line paragraphs opening the same way scored clean.
+    """
+    paras = _paragraphs(text)
+    run_word, run_start, run = None, 0, 0
+    for off, block in paras:
+        first = re.match(r"\s*\b([\w']+)", block)
+        word = first.group(1).lower() if first else ""
+        if word and word == run_word:
+            run += 1
+            if run == 3:
+                yield (run_start, off + len(block),
+                       f"three paragraphs opening with '{word}'")
+        else:
+            run_word, run_start, run = word, off, 1
+
+def _find_engagement_bait(text: str):
+    """Pattern 27 — the closing question that exists to farm replies.
+
+    Scoped to the last two paragraphs on purpose. A question in the body is
+    usually doing work; a question in the sign-off, addressed to the reader,
+    almost never is. Hashtag blocks are deliberately not flagged here:
+    `platform_optimizer` specifies three to five of them for LinkedIn, and a
+    detector fighting the generator's own brief would be noise.
+    """
+    paras = _paragraphs(text)
+    if not paras:
+        return
+    # Trailing hashtag-only blocks are the sign-off's furniture, not the tell.
+    tail = [
+        (off, b) for off, b in paras[-3:]
+        if not re.fullmatch(r"(?:#\w+\s*)+", b.strip())
+    ][-2:]
+    for off, block in tail:
+        stripped = block.strip()
+        if "?" not in stripped:
+            continue
+        if not re.search(r"(?i)\b(you|your|you're|anyone|others|who else)\b", stripped):
+            continue
+        yield off, off + len(block), stripped[:90]
+
+
 # ─── The taxonomy ─────────────────────────────────────────────────────────────
 # Numbers follow the humanizer taxonomy. Pattern 1 (not X but Y) and pattern 12
 # (overused AI words) already live in text_cleaner and humanizer respectively,
@@ -243,7 +352,6 @@ PATTERNS: list[Pattern] = [
     Pattern(
         "TELL05", "5", "Arguing with no one", STRONG,
         regexes=[
-            r"(?i)\bthis isn'?t (mainly |really )?about\b",
             r"(?i)\bi'?m not saying\b",
             r"(?im)^to be clear,",
             r"(?i)\bdon'?t get me wrong\b",
@@ -402,6 +510,44 @@ PATTERNS: list[Pattern] = [
     Pattern(
         "TELL24", "24", "Heading repeated in the first sentence", WEAK,
         finder=_find_heading_echo, solo_threshold=2,
+    ),
+    Pattern(
+        "TELL25", "25", "Fragment paragraph rhythm", WEAK,
+        finder=_find_fragment_paragraphs, solo_threshold=1,
+    ),
+    Pattern(
+        "TELL26", "26", "Parallel paragraph openings", WEAK,
+        finder=_find_parallel_paragraph_openings, solo_threshold=1,
+    ),
+    Pattern(
+        "TELL27", "27", "Engagement-bait closing question", STRONG,
+        finder=_find_engagement_bait,
+    ),
+    Pattern(
+        "TELL28", "28", "Listicle promise", STRONG,
+        regexes=[
+            r"(?i)\b(here are|these are)\s+(the\s+)?(two|three|four|five|six|seven|\d+)\s+"
+            r"(things|lessons|reasons|ways|rules|takeaways|mistakes|questions|shifts|signals)\b",
+            r"(?i)\b(two|three|four|five|six|seven|\d+)\s+"
+            r"(things|lessons|reasons|ways|rules|takeaways|mistakes|questions|shifts|signals|forces)\s+"
+            r"(matter|stand out|to know|you (should|need to) know|come to mind|changed|explain)\b",
+            r"(?i)\bwhat (i|we) learned (from|about)\b",
+        ],
+    ),
+    Pattern(
+        "TELL29", "29", "Contrast swap without the contrast word", WEAK,
+        regexes=[
+            # "That's not a conspiracy. It's arithmetic." — the same move as
+            # "not X but Y" with the "but" deleted and the comma promoted to a
+            # full stop, which is exactly why the text_cleaner family missed it.
+            r"(?i)\b(?:it|this|that|they)(?:['\u2019]s|['\u2019]re)\s+not\s+"
+            r"(?:a|an|the)?\s*[\w][\w '\-]{2,30}[.;]\s+"
+            r"(?:it|this|that|they)(?:['\u2019]s|['\u2019]re)\s+(?:a|an|the)?\s*\w",
+            # "The state is accelerant and beneficiary, not sole cause." —
+            # the same contrast, run backwards as a trailing appositive.
+            r"(?i),\s+not\s+(?:a|an|the)?\s*[\w][\w '\-]{2,30}\.(?=\s|$)",
+        ],
+        solo_threshold=1,
     ),
 ]
 

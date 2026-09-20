@@ -39,6 +39,11 @@ TELL_RULE_IDS: dict[str, str] = {
     "TELL22": "SR036",   # Chatbot residue
     "TELL23": "SR037",   # Knowledge-limit disclaimers
     "TELL24": "SR038",   # Heading repeated in the first sentence
+    "TELL25": "SR039",   # Fragment paragraph rhythm
+    "TELL26": "SR040",   # Parallel paragraph openings
+    "TELL27": "SR041",   # Engagement-bait closing question
+    "TELL28": "SR042",   # Listicle promise
+    "TELL29": "SR043",   # Contrast swap without the contrast word
 }
 
 # What the writer should do instead. The regeneration agent passes these
@@ -76,6 +81,11 @@ FIXES: dict[str, str] = {
     "TELL23": "Remove the disclaimer about limited information. Either the claim "
               "is supported by the brand material or it does not belong.",
     "TELL24": "Do not repeat the heading in the sentence beneath it.",
+    "TELL25": "Join the one-line paragraphs into paragraphs that carry a claim each. The staccato cadence is doing the work the sentences should.",
+    "TELL26": "Vary how consecutive paragraphs open. Three in a row on the same word reads as a generated list.",
+    "TELL27": "Delete the closing question. If the piece has a point, end on it rather than asking the reader to supply one.",
+    "TELL28": "Drop the count. Make the points without announcing how many are coming.",
+    "TELL29": "State the positive claim on its own. Replacing one noun with another across a full stop is the same contrast move as 'not X but Y'.",
 }
 
 # Style rules deliberately weigh less than grounding. A dash is a matter of
