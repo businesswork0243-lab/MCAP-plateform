@@ -22,7 +22,14 @@ BRAND IDENTITY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Brand Name: {brand_name}
 Mission: {mission}
+Vision: {vision}
 Life Purpose: {life_purpose}
+Positioning: {positioning}
+Description: {description}
+
+VALUE PROPOSITIONS (frame the content consistently with these — never add
+them as new claims the original does not make):
+{value_propositions}
 
 TONE PROFILE:
 {tone_description}
@@ -41,6 +48,7 @@ BRAND BELIEFS & CHARACTER
 VOCABULARY RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Preferred Terms (use these): {preferred_terms}
+Industry Vocabulary (use where it fits): {industry_vocabulary}
 Banned Phrases (NEVER use, replace with natural alternatives): {banned_phrases}
 
 KEY MESSAGES (weave in naturally where relevant — don't force):
@@ -50,6 +58,7 @@ COMPLIANCE NOTES:
 {compliance_notes}
 
 {document_context}
+{example_block}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BRAND ALIGNMENT RULES:
 1. Replace ALL banned phrases with brand-appropriate alternatives
@@ -230,6 +239,22 @@ follow the uploaded documents.
     # ✅ FIX: compliance variable name typo fix
     compliance = compliance_notes
 
+    # Past brand content shows the voice; its facts belong to other posts.
+    examples = [
+        str(e.get("content") or e.get("text") or e) if isinstance(e, dict) else str(e)
+        for e in (brand_profile.get("example_content") or [])
+    ]
+    examples = [e.strip() for e in examples if e and e.strip()]
+    example_block = ""
+    if examples:
+        example_block = (
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            "EXAMPLE BRAND CONTENT (voice reference only — match how it sounds,\n"
+            "never copy its sentences or carry over its facts):\n"
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            + "\n\n---\n\n".join(examples[:3])[:3000]
+        )
+
     user_prompt = USER_TEMPLATE.format(
         content=content,
         brand_name=brand_profile.get("name", "Unknown Brand"),
@@ -240,6 +265,18 @@ follow the uploaded documents.
             "Not specified"
         ),
         life_purpose=brand_profile.get("life_purpose") or "Not specified",
+        vision=brand_profile.get("vision") or "Not specified",
+        positioning=brand_profile.get("positioning") or "Not specified",
+        description=brand_profile.get("description") or "Not specified",
+        value_propositions=(
+            "\n".join(f"• {v}" for v in brand_profile.get("value_propositions") or [])
+            or "None specified"
+        ),
+        industry_vocabulary=(
+            ", ".join(brand_profile.get("industry_vocabulary") or [])
+            or "None specified"
+        ),
+        example_block=example_block,
         tone_description=_build_tone_description(tone_settings),
         formality=formality,
         formality_label=_tone_label(formality, "Casual", "Semi-formal", "Formal"),

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 load_dotenv()
 
@@ -170,6 +170,7 @@ def _build_verified_facts(profile: Optional[dict]) -> str:
         ("Value propositions", "value_propositions"),
         ("Core values",       "core_values"),
         ("Stands for",        "stands_for"),
+        ("Stands against",    "stands_against"),
     ):
         val = profile.get(key)
         if isinstance(val, list) and val:
@@ -222,11 +223,44 @@ class BrandProfile(BaseModel):
     dislikes:          list[str] = Field(default_factory=list)
     core_motivations:  list[str] = Field(default_factory=list)
 
+    # Pydantic drops undeclared keys without a word, so these columns were
+    # saved by the brand page and never reached a prompt. Every content
+    # column of brand_profiles must be declared here; the contract test in
+    # tests/test_brand_profile_contract.py reads the migrations and checks.
+    website:             str       = ""
+    description:         str       = ""
+    vision:              str       = ""
+    positioning:         str       = ""
+    industry_vocabulary: list[str] = Field(default_factory=list)
+    value_propositions:  list[str] = Field(default_factory=list)
+    example_content:     list      = Field(default_factory=list)
+
     # ── Brand Document Fields (Critical for Audit) ─────────────────────
     document_context:  str       = ""
     doc_context:       str       = ""
     has_documents:     bool      = False
     document_count:    int       = 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalise_db_row(cls, data):
+        """Accept a brand_profiles row as Postgres returns it.
+
+        An empty optional column arrives as NULL, and a None in a str field
+        failed the whole request with 422. The refine and re-humanize routes
+        also send flat tone_* columns without the nested tone_settings.
+        """
+        if not isinstance(data, dict):
+            return data
+        data = {k: v for k, v in data.items() if v is not None}
+        if not data.get("tone_settings") and not data.get("tone"):
+            flat = {
+                k[len("tone_"):]: v for k, v in data.items()
+                if k.startswith("tone_") and isinstance(v, (int, float))
+            }
+            if flat:
+                data["tone_settings"] = flat
+        return data
 
     def as_dict(self) -> dict:
         """Convert to dict while preserving document context."""

@@ -192,6 +192,7 @@ def compile(req: PDLRequest) -> CompiledPromptPackage:
     preferred_terms = brand.get("preferred_terms") or []
     key_messages    = brand.get("key_messages") or []
     compliance_notes= brand.get("compliance_notes") or ""
+    industry_vocabulary = brand.get("industry_vocabulary") or []
 
     # New brand fields
     likes            = brand.get("likes") or []
@@ -247,7 +248,9 @@ def compile(req: PDLRequest) -> CompiledPromptPackage:
         # The writer previously saw neither of these; they reached only the
         # brand optimizer and QA, after the draft had already been written.
         "compliance_notes":    compliance_notes,
-        "preferred_terms":     preferred_terms,
+        # Industry vocabulary is the same instruction to the writer: these
+        # exact words, where they fit.
+        "preferred_terms":     list(dict.fromkeys([*preferred_terms, *industry_vocabulary])),
     }
 
     # ── Platform instructions ────────────────────────────────────────────────
