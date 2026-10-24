@@ -20,7 +20,7 @@ function createRedisConnection(): IORedis {
     }
     const client = new IORedis(redisUrl, options);
     client.on('error', (err: any) => {
-      if (err.code === 'ECONNRESET') return;
+      if (err.code === 'ECONNRESET' || err.code === 'EPIPE') return;
       logger.warn('Redis connection issue:', { error: err.message });
     });
     return client;

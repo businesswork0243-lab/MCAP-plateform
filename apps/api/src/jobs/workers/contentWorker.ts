@@ -563,7 +563,7 @@ export function startContentWorker(): void {
     })
   );
   worker.on('error', (err: any) => {
-    if (err.code === 'ECONNRESET') return;
+    if (err.code === 'ECONNRESET' || err.code === 'EPIPE') return;
     logger.error('Worker error', { error: err.message });
   });
   worker.on('active', (job) =>
