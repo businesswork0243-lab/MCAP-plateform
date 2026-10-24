@@ -104,23 +104,50 @@ contentQueueEvents.on('error', (err: any) => {
   logger.warn('contentQueueEvents error:', { error: err.message });
 });
 
+let _contentExecutor: ((data: ContentJobData) => Promise<void>) | null = null;
+
+export function registerContentExecutor(executor: (data: ContentJobData) => Promise<void>) {
+  _contentExecutor = executor;
+}
+
 export async function addContentJob(
   requestId: string,
   payload: Omit<ContentJobData, 'requestId'>,
   priority = 0
 ) {
+  const jobData: ContentJobData = { requestId, ...payload };
+  let queued = false;
+
   try {
-    return await contentQueue.add(
-      'generate',
-      { requestId, ...payload },
-      { priority }
+    // Attempt BullMQ with a 2-second timeout
+    const addPromise = contentQueue.add('generate', jobData, { priority });
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Redis add timeout')), 2000)
     );
+    await Promise.race([addPromise, timeoutPromise]);
+    queued = true;
+    logger.info('✅ Job queued via BullMQ', { requestId });
   } catch (err: any) {
-    logger.error('Failed to addContentJob to BullMQ:', {
-      error: err?.message || err,
+    logger.warn('⚠️ BullMQ queue add skipped (Upstash socket timeout). Using direct in-process execution:', {
+      error: err?.message,
       requestId,
     });
-    throw err;
+  }
+
+  // If Redis timed out or threw (e.g. Upstash idle reset), execute directly in-process
+  if (!queued) {
+    setImmediate(() => {
+      if (_contentExecutor) {
+        _contentExecutor(jobData).catch((err) => {
+          logger.error('In-process content generation failed:', {
+            error: err instanceof Error ? err.message : err,
+            requestId,
+          });
+        });
+      } else {
+        logger.error('No content executor registered for fallback', { requestId });
+      }
+    });
   }
 }
 

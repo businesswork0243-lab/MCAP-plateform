@@ -24,7 +24,7 @@ if (typeof window !== 'undefined') {
 // Standard API calls (60s - generous for cloud cold starts)
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60_000,
+  timeout: 30_000,
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -62,7 +62,7 @@ generationApi.interceptors.request.use(attachToken);
 
 interface QueueItem {
   resolve: (token: string) => void;
-  reject:  (err: unknown)  => void;
+  reject: (err: unknown) => void;
 }
 
 let isRefreshing = false;
@@ -70,7 +70,7 @@ let failedQueue: QueueItem[] = [];
 
 const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach(({ resolve, reject }) => {
-    if (error)      reject(error);
+    if (error) reject(error);
     else if (token) resolve(token);
   });
   failedQueue = [];
@@ -123,14 +123,14 @@ const setupResponseInterceptor = (instance: typeof api) => {
         _retry?: boolean;
       };
 
-      if (!error.response)                   return Promise.reject(error);
-      if (error.response.status !== 401)     return Promise.reject(error);
-      if (originalRequest._retry)            return Promise.reject(error);
+      if (!error.response) return Promise.reject(error);
+      if (error.response.status !== 401) return Promise.reject(error);
+      if (originalRequest._retry) return Promise.reject(error);
 
       const url = originalRequest.url || '';
       if (
         url.includes('/auth/refresh') ||
-        url.includes('/auth/login')   ||
+        url.includes('/auth/login') ||
         url.includes('/auth/register')
       ) {
         return Promise.reject(error);
@@ -150,7 +150,7 @@ const setupResponseInterceptor = (instance: typeof api) => {
       }
 
       originalRequest._retry = true;
-      isRefreshing            = true;
+      isRefreshing = true;
 
       try {
         const newToken = await refreshTokenCall();

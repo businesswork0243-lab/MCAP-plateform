@@ -4,7 +4,7 @@ import axios, { AxiosError } from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../../db/connection';
 import { logger } from '../../lib/logger';
-import { ContentJobData } from '../queue';
+import { ContentJobData, registerContentExecutor } from '../queue';
 import { emitToOrg } from '../../services/websocket';
 import { toQualityScore } from './quality-score';
 
@@ -315,18 +315,19 @@ async function fetchBrandWithDocuments(
   }
 }
 
-// ── Main Job Processor ────────────────────────────────────────────────────────
+// ── Main Content Generation Engine (Callable directly or via BullMQ) ────────
 
-async function processContentJob(job: Job<ContentJobData>): Promise<void> {
-  const { requestId, organizationId } = job.data;
+export async function executeContentGeneration(
+  jobData: ContentJobData,
+  attempt = 1,
+  maxAttempts = 1
+): Promise<void> {
+  const { requestId, organizationId } = jobData;
   const startTime = Date.now();
-  const attempt = job.attemptsMade + 1;
-  const maxAttempts = job.opts.attempts || 3;
 
-  logger.info('🚀 Processing content job', {
-    jobId: job.id,
+  logger.info('🚀 Executing content generation', {
     requestId,
-    topic: job.data.topic?.slice(0, 60),
+    topic: jobData.topic?.slice(0, 60),
     attempt,
     maxAttempts,
   });
@@ -349,7 +350,7 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
     // ── Step 2: Brand fetch ───────────────────────────────────────────────
     emitProgress(organizationId, requestId, PROGRESS.FETCHING_BRAND, 'fetching_brand_context');
 
-    const freshBrandProfile = await fetchBrandWithDocuments(job.data.brandProfileId);
+    const freshBrandProfile = await fetchBrandWithDocuments(jobData.brandProfileId);
 
     if (freshBrandProfile) {
       logger.info('Fresh brand loaded', {
@@ -398,8 +399,8 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
     let result: PipelineResponse;
     try {
       result = await callFullPipeline({
-        ...job.data,
-        brandProfile: (freshBrandProfile || job.data.brandProfile) as any,
+        ...jobData,
+        brandProfile: (freshBrandProfile || jobData.brandProfile) as any,
       });
     } finally {
       clearInterval(heartbeat);
@@ -483,9 +484,8 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
     const errorMsg = parseError(err);
     const isFinalAttempt = attempt >= maxAttempts;
 
-    logger.error('❌ Content job failed', {
+    logger.error('❌ Content generation failed', {
       requestId,
-      jobId: job.id,
       attempt,
       error: errorMsg,
     });
@@ -513,6 +513,10 @@ async function processContentJob(job: Job<ContentJobData>): Promise<void> {
 
     throw err;
   }
+}
+
+async function processContentJob(job: Job<ContentJobData>): Promise<void> {
+  return executeContentGeneration(job.data, job.attemptsMade + 1, job.opts.attempts || 3);
 }
 
 // ── Error Parser ──────────────────────────────────────────────────────────────
@@ -585,3 +589,6 @@ export function startContentWorker(): void {
     logger.info('Worker closed');
   });
 }
+
+// Register direct in-process executor for fallback
+registerContentExecutor(executeContentGeneration);
