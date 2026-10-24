@@ -5,7 +5,7 @@ import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
-import api from '@/lib/api';
+import api, { generationApi } from '@/lib/api';
 import { PlatformIconBadge, PLATFORM_CONFIG } from '@/components/platform-icons';
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -1305,7 +1305,7 @@ export default function NewContentPage() {
         Object.entries(payload).filter(([, v]) => v !== undefined && v !== null && v !== '')
       );
 
-      const response = await api.post('/content/generate', cleanPayload);
+      const response = await generationApi.post('/content/generate', cleanPayload);
       const { requestId, contentId } = response.data;
 
       router.push(`/content/${contentId || requestId}/generating`);

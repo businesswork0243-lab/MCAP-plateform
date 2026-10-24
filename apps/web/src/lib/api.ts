@@ -21,10 +21,10 @@ if (typeof window !== 'undefined') {
 
 // ─── Axios Instances ──────────────────────────────────────────────────────────
 
-// Standard API calls (30s)
+// Standard API calls (60s - generous for cloud cold starts)
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30_000,
+  timeout: 60_000,
   headers: { 'Content-Type': 'application/json' },
 });
 
