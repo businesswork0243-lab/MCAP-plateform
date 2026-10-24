@@ -121,18 +121,18 @@ const createRequestSchema = z.object({
 
   // Audience
   audience:            z.string().optional().default('General Business'),
-  audienceDescription: z.string().optional(),
-  icpProfileId:        z.string().uuid().optional(),
+  audienceDescription: z.string().optional().default(''),
+  icpProfileId:        z.string().uuid().nullish().or(z.literal('')),
 
   // Platforms — REQUIRED, min 1
   platforms: z.array(z.string().min(1)).min(1, 'Select at least one platform'),
 
   // Blog word count
-  wordCount: z.number().min(100).max(5000).optional(),
+  wordCount: z.number().min(100).max(5000).nullish(),
 
   // Structure
   writingStructure:     z.string().optional().default('thesis'),
-  customStructureId:    z.string().uuid().optional(),
+  customStructureId:    z.string().uuid().nullish().or(z.literal('')),
   customStructureFlow:  z.string().optional(),
 
   // Style
@@ -145,7 +145,7 @@ const createRequestSchema = z.object({
   customCta: z.string().optional(),
 
   // Brand & Tone
-  brandProfileId:   z.string().uuid().optional(),
+  brandProfileId:   z.string().uuid().nullish().or(z.literal('')),
   toneOverrides:    z.record(z.number()).optional(),
   tonalitySpectrum: z.record(z.number()).optional().default({}),
 
@@ -167,8 +167,8 @@ const createRequestSchema = z.object({
   readingLevel:  z.string().optional(),
 
   // Org
-  projectId: z.string().uuid().optional(),
-  clientId:  z.string().uuid().optional(),
+  projectId: z.string().uuid().nullish().or(z.literal('')),
+  clientId:  z.string().uuid().nullish().or(z.literal('')),
 })
 
 const repurposeSchema = z.object({
@@ -567,9 +567,14 @@ contentRouter.post('/generate', async (req: AuthenticatedRequest, res: Response)
       status: 'queued',
       message: 'Generation started',
     })
-  } catch (err) {
-    logger.error('POST /content/generate error:', { error: err })
-    res.status(500).json({ error: 'Failed to queue generation' })
+  } catch (err: any) {
+    logger.error('POST /content/generate error:', {
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    res.status(500).json({
+      error: err instanceof Error ? err.message : 'Failed to queue generation',
+    });
   }
 })
 

@@ -1302,7 +1302,7 @@ export default function NewContentPage() {
       };
 
       const cleanPayload = Object.fromEntries(
-        Object.entries(payload).filter(([, v]) => v !== undefined)
+        Object.entries(payload).filter(([, v]) => v !== undefined && v !== null && v !== '')
       );
 
       const response = await api.post('/content/generate', cleanPayload);
@@ -1311,15 +1311,8 @@ export default function NewContentPage() {
       router.push(`/content/${contentId || requestId}/generating`);
 
     } catch (err: any) {
-      // ✅ NEW: Better error messages from backend
       const backendErr = err?.response?.data;
-      let msg = 'Generation failed';
-
-      if (backendErr?.error) {
-        msg = typeof backendErr.error === 'string'
-          ? backendErr.error
-          : 'Validation failed';
-      }
+      let msg = backendErr?.error || err?.message || 'Generation failed';
 
       if (backendErr?.details && Array.isArray(backendErr.details)) {
         msg = backendErr.details.map((d: any) => `${d.field}: ${d.message}`).join(', ');

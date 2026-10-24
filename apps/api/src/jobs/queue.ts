@@ -95,12 +95,12 @@ export const qaQueue = new Queue('qa', {
 });
 attachQueueErrorHandlers(qaQueue, 'qa');
 
-// Queue events for monitoring
+// Queue events for monitoring — MUST have its own dedicated connection for Pub/Sub
 export const contentQueueEvents = new QueueEvents('content-generation', {
-  connection: connection as any,
+  connection: createRedisConnection() as any,
 });
 contentQueueEvents.on('error', (err: any) => {
-  if (err.code === 'ECONNRESET') return;
+  if (err.code === 'ECONNRESET' || err.code === 'EPIPE') return;
   logger.warn('contentQueueEvents error:', { error: err.message });
 });
 
@@ -109,11 +109,19 @@ export async function addContentJob(
   payload: Omit<ContentJobData, 'requestId'>,
   priority = 0
 ) {
-  return contentQueue.add(
-    'generate',
-    { requestId, ...payload },
-    { priority }
-  );
+  try {
+    return await contentQueue.add(
+      'generate',
+      { requestId, ...payload },
+      { priority }
+    );
+  } catch (err: any) {
+    logger.error('Failed to addContentJob to BullMQ:', {
+      error: err?.message || err,
+      requestId,
+    });
+    throw err;
+  }
 }
 
 export async function addHumanizationJob(requestId: string, artifactId: string) {
