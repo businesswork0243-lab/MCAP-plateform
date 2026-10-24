@@ -44,7 +44,8 @@ export async function connectDB(): Promise<void> {
   pool = _pool;
 
   // Pool error handler
-  _pool.on('error', (err) => {
+  _pool.on('error', (err: any) => {
+    if (err.code === 'ECONNRESET') return;
     logger.error('PostgreSQL pool error:', { error: err.message });
   });
 

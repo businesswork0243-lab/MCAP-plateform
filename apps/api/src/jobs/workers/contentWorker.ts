@@ -28,6 +28,9 @@ function getRedisConnection() {
       url: redisUrl,
       enableReadyCheck: false,
       maxRetriesPerRequest: null as unknown as number,
+      keepAlive: 10000,
+      tls: redisUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
+      retryStrategy: (times: number) => Math.min(times * 100, 3000),
     };
   }
   return {
@@ -36,6 +39,8 @@ function getRedisConnection() {
     password: process.env.REDIS_PASSWORD || undefined,
     enableReadyCheck: false,
     maxRetriesPerRequest: null as unknown as number,
+    keepAlive: 10000,
+    retryStrategy: (times: number) => Math.min(times * 100, 3000),
   };
 }
 
@@ -557,9 +562,10 @@ export function startContentWorker(): void {
       attempts: job?.attemptsMade,
     })
   );
-  worker.on('error', (err) =>
-    logger.error('Worker error', { error: err.message })
-  );
+  worker.on('error', (err: any) => {
+    if (err.code === 'ECONNRESET') return;
+    logger.error('Worker error', { error: err.message });
+  });
   worker.on('active', (job) =>
     logger.info('Worker: Job started', {
       jobId: job.id,

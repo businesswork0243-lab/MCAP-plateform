@@ -1,13 +1,54 @@
 import { Queue, Worker, QueueEvents } from 'bullmq';
-import IORedis from 'ioredis';
+import IORedis, { RedisOptions } from 'ioredis';
+import { logger } from '../lib/logger';
 
-const connection = process.env.REDIS_URL
-  ? new IORedis(process.env.REDIS_URL, { maxRetriesPerRequest: null })
-  : new IORedis({
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      maxRetriesPerRequest: null,
+function createRedisConnection(): IORedis {
+  const redisUrl = process.env.REDIS_URL;
+
+  const options: RedisOptions = {
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+    keepAlive: 10000,
+    retryStrategy(times) {
+      return Math.min(times * 100, 3000);
+    },
+  };
+
+  if (redisUrl) {
+    if (redisUrl.startsWith('rediss://')) {
+      options.tls = { rejectUnauthorized: false };
+    }
+    const client = new IORedis(redisUrl, options);
+    client.on('error', (err: any) => {
+      if (err.code === 'ECONNRESET') return;
+      logger.warn('Redis connection issue:', { error: err.message });
     });
+    return client;
+  }
+
+  const client = new IORedis({
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    maxRetriesPerRequest: null,
+    ...options,
+  });
+
+  client.on('error', (err: any) => {
+    if (err.code === 'ECONNRESET') return;
+    logger.warn('Redis connection issue:', { error: err.message });
+  });
+
+  return client;
+}
+
+const connection = createRedisConnection();
+
+function attachQueueErrorHandlers(q: Queue, name: string) {
+  q.on('error', (err: any) => {
+    if (err.code === 'ECONNRESET') return;
+    logger.warn(`Queue [${name}] error:`, { error: err.message });
+  });
+}
 
 // Queue definitions
 export const contentQueue = new Queue('content-generation', {
@@ -19,6 +60,7 @@ export const contentQueue = new Queue('content-generation', {
     removeOnFail: 500,
   },
 });
+attachQueueErrorHandlers(contentQueue, 'content-generation');
 
 export const humanizationQueue = new Queue('humanization', {
   connection: connection as any,
@@ -29,6 +71,7 @@ export const humanizationQueue = new Queue('humanization', {
     removeOnFail: 200,
   },
 });
+attachQueueErrorHandlers(humanizationQueue, 'humanization');
 
 export const exportQueue = new Queue('export', {
   connection: connection as any,
@@ -39,6 +82,7 @@ export const exportQueue = new Queue('export', {
     removeOnFail: 100,
   },
 });
+attachQueueErrorHandlers(exportQueue, 'export');
 
 export const qaQueue = new Queue('qa', {
   connection: connection as any,
@@ -49,9 +93,16 @@ export const qaQueue = new Queue('qa', {
     removeOnFail: 200,
   },
 });
+attachQueueErrorHandlers(qaQueue, 'qa');
 
 // Queue events for monitoring
-export const contentQueueEvents = new QueueEvents('content-generation', { connection: connection as any });
+export const contentQueueEvents = new QueueEvents('content-generation', {
+  connection: connection as any,
+});
+contentQueueEvents.on('error', (err: any) => {
+  if (err.code === 'ECONNRESET') return;
+  logger.warn('contentQueueEvents error:', { error: err.message });
+});
 
 export async function addContentJob(
   requestId: string,
