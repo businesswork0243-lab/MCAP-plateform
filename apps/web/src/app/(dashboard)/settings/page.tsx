@@ -493,7 +493,7 @@ function IntegrationsSection() {
   return (
     <SettingsSection
       title="Integrations"
-      description="Connect M-CAP with your favorite tools"
+      description="Connect Semantiq with your favorite tools"
     >
       <div className="space-y-3">
         {INTEGRATIONS.map(integration => (

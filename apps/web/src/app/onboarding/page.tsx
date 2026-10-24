@@ -152,7 +152,7 @@ export default function OnboardingPage() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 mb-4">
             <StepIcon className="w-6 h-6 text-violet-400" />
           </div>
-          <h1 className="text-3xl font-bold mb-2">Welcome to M-CAP!</h1>
+          <h1 className="text-3xl font-bold mb-2">Welcome to Semantiq!</h1>
           <p className="text-sm text-gray-500">
             Let&apos;s customize your experience — Step {step} of {totalSteps}
           </p>
@@ -432,7 +432,7 @@ export default function OnboardingPage() {
                     Primary Use Case
                   </label>
                   <p className="text-xs text-muted-foreground mt-1 mb-3">
-                    What will you mainly use M-CAP for?
+                    What will you mainly use Semantiq for?
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     {[

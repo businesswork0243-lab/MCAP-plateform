@@ -37,7 +37,7 @@ export default function ForgotPasswordPage() {
       {/* Logo & Header */}
       <div className="flex flex-col items-center mb-8">
         <div className="w-14 h-14 bg-violet-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-violet-600/30">
-          <span className="text-white text-2xl font-bold">M</span>
+          <span className="text-white text-2xl font-bold">S</span>
         </div>
         <h1 className="text-2xl font-bold text-white mb-1">
           {sent ? 'Check your email' : 'Reset your password'}
@@ -126,7 +126,7 @@ export default function ForgotPasswordPage() {
       </p>
 
       <p className="text-center text-xs text-gray-700 mt-8">
-        © {new Date().getFullYear()} M-CAP · Multi-Agent Content Platform
+        © {new Date().getFullYear()} Semantiq
       </p>
     </motion.div>
   );

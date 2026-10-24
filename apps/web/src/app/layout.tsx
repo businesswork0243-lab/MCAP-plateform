@@ -6,7 +6,7 @@ import { Providers } from './providers';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title:       'M-CAP · Multi-Agent Content Platform',
+  title:       'Semantiq',
   description: 'AI-powered content generation platform',
 };
 

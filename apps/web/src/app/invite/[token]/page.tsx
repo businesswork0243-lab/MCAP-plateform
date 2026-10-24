@@ -156,7 +156,7 @@ export default function AcceptInvitePage() {
 
         {invite.userExists ? (
           <p className="text-sm text-gray-400">
-            You already have an M-CAP account with this email. Accepting moves
+            You already have a Semantiq account with this email. Accepting moves
             it into {invite.orgName}.
           </p>
         ) : (

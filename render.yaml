@@ -1,45 +1,10 @@
-# render.yaml
+# render.yaml - Semantiq Backend API (Optimized for 100% Lifetime Free Plan)
 services:
-  # ──────────────────────────────────────────
-  # 1. AI Engine (FastAPI + Python)
-  # ──────────────────────────────────────────
+  # ──────────────────────────────────────────────────────────
+  # Semantiq API + Internal Background Worker (Single Free Service)
+  # ──────────────────────────────────────────────────────────
   - type: web
-    name: mcap-ai-engine
-    env: python
-    region: oregon
-    plan: free
-    rootDir: apps/ai-engine
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    # FIXED: timeout-keep-alive 120 (pipeline 90s + buffer)
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --timeout-keep-alive 120
-    healthCheckPath: /health
-    envVars:
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENAI_BASE_URL
-        value: "https://api.deepseek.com"
-      - key: OPENAI_MODEL
-        value: "deepseek-chat"
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: ANTHROPIC_MODEL
-        value: "claude-sonnet-4-6"
-      - key: ENVIRONMENT
-        value: "production"
-      - key: LOG_LEVEL
-        value: "INFO"
-      # FIXED: Pipeline timeout aligned with uvicorn keep-alive
-      - key: PIPELINE_TIMEOUT_SECONDS
-        value: "150"
-      # FIXED: Allowed origins with full URL format
-      - key: ALLOWED_ORIGINS
-        value: "https://mcap-api.onrender.com,https://mcap-web.onrender.com"
-
-  # ──────────────────────────────────────────
-  # 2. Express API (Node.js)
-  # ──────────────────────────────────────────
-  - type: web
-    name: mcap-api
+    name: semantiq-api
     env: node
     region: oregon
     plan: free
@@ -48,119 +13,40 @@ services:
     startCommand: npm run start -w @mcap/api
     healthCheckPath: /health
     envVars:
+      # Database from Neon.tech (Paste in Render Dashboard)
       - key: DATABASE_URL
-        fromDatabase:
-          name: mcap-postgres
-          property: connectionString
+        sync: false
+
+      # Redis from Upstash (Paste in Render Dashboard)
       - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: mcap-redis
-          property: connectionString
-      # FIXED: Full URL with https protocol
+        sync: false
+
+      # AI Engine URL (From Hugging Face Spaces or Render)
       - key: AI_ENGINE_URL
-        value: "https://mcap-ai-engine.onrender.com"
+        sync: false
+
+      # Security & Tokens
       - key: JWT_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
         generateValue: true
       - key: NODE_ENV
         value: "production"
+
+      # RUN_WORKERS=true embeds BullMQ worker inside the API
+      # Saves free hours and avoids paid Render worker tier!
       - key: RUN_WORKERS
-        value: "false"
-      # FIXED: Full URL with https protocol
+        value: "true"
+
+      # Frontend Web URL (From Vercel)
       - key: WEB_URL
-        value: "https://mcap-web.onrender.com"
+        value: "https://semantiq.vercel.app"
+
       - key: RATE_LIMIT_WINDOW_MS
         value: "900000"
       - key: RATE_LIMIT_MAX
         value: "100"
       - key: LOG_LEVEL
         value: "info"
-      # FIXED: AI timeout aligned (150s pipeline + 30s buffer)
       - key: AI_TIMEOUT_MS
         value: "180000"
-
-  # ──────────────────────────────────────────
-  # 3. Next.js Frontend
-  # ──────────────────────────────────────────
-  - type: web
-    name: mcap-web
-    env: node
-    region: oregon
-    plan: free
-    rootDir: .
-    buildCommand: npm install && npx turbo run build --filter=@mcap/web
-    startCommand: npm run start -w @mcap/web
-    healthCheckPath: /api/health
-    envVars:
-      # FIXED: Full URL with https protocol
-      - key: NEXT_PUBLIC_API_URL
-        value: "https://mcap-api.onrender.com"
-      - key: NODE_ENV
-        value: "production"
-      - key: NEXTAUTH_SECRET
-        generateValue: true
-
-  # ──────────────────────────────────────────
-  # 4. Background Worker (BullMQ)
-  # ──────────────────────────────────────────
-  - type: worker
-    name: mcap-worker
-    env: node
-    region: oregon
-    plan: free
-    rootDir: .
-    buildCommand: npm install && npx turbo run build --filter=@mcap/api
-    startCommand: npm run worker -w @mcap/api
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: mcap-postgres
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: mcap-redis
-          property: connectionString
-      # FIXED: Full URL with https protocol
-      - key: AI_ENGINE_URL
-        value: "https://mcap-ai-engine.onrender.com"
-      - key: NODE_ENV
-        value: "production"
-      - key: RUN_WORKERS
-        value: "true"
-      # FIXED: JWT_SECRET hardcode nahi, same value use karo
-      # Render Dashboard mein manually same value set karo
-      - key: JWT_SECRET
-        sync: false
-      - key: JWT_REFRESH_SECRET
-        sync: false
-      - key: LOG_LEVEL
-        value: "info"
-      - key: AI_TIMEOUT_MS
-        value: "180000"
-      - key: WORKER_CONCURRENCY
-        value: "2"
-
-  # ──────────────────────────────────────────
-  # 5. Redis (Key-Value Store)
-  # ──────────────────────────────────────────
-  - type: keyvalue
-    name: mcap-redis
-    region: oregon
-    plan: free
-    # FIXED: noeviction - BullMQ requirement
-    maxmemoryPolicy: noeviction
-    ipAllowList: []
-
-databases:
-  # ──────────────────────────────────────────
-  # 6. PostgreSQL Database
-  # ──────────────────────────────────────────
-  - name: mcap-postgres
-    databaseName: mcap_db
-    user: mcap
-    region: oregon
-    plan: free
-    postgresMajorVersion: 16

@@ -158,13 +158,13 @@ export default function LoginPage() {
       {/* ── Logo & Header ── */}
       <div className="flex flex-col items-center mb-8">
         <div className="w-14 h-14 bg-violet-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg shadow-violet-600/30">
-          <span className="text-white text-2xl font-bold">M</span>
+          <span className="text-white text-2xl font-bold">S</span>
         </div>
         <h1 className="text-2xl font-bold text-white mb-1">
           Welcome back
         </h1>
         <p className="text-gray-500 text-sm">
-          Sign in to your M-CAP account
+          Sign in to your Semantiq account
         </p>
       </div>
 
@@ -189,7 +189,7 @@ export default function LoginPage() {
 
       {/* Footer */}
       <p className="text-center text-xs text-gray-700 mt-8">
-        © {new Date().getFullYear()} M-CAP · Multi-Agent Content Platform
+        © {new Date().getFullYear()} Semantiq
       </p>
     </motion.div>
   );

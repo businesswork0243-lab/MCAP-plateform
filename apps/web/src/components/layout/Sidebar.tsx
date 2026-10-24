@@ -232,12 +232,12 @@ export function Sidebar() {
       {/* ═══ Logo ═══ */}
       <div className="h-14 flex items-center gap-2.5 px-4 border-b border-white/10 shrink-0">
         <div className="w-7 h-7 bg-gradient-to-br from-violet-500 to-violet-700 rounded-lg flex items-center justify-center shrink-0 shadow-lg shadow-violet-500/30">
-          <span className="text-white text-xs font-bold">M</span>
+          <span className="text-white text-xs font-bold">S</span>
         </div>
         {!collapsed && (
           <div className="flex-1 min-w-0">
             <span className="font-bold text-white text-sm tracking-tight">
-              M-CAP
+              Semantiq
             </span>
             {user?.organizationName && (
               <p className="text-xs text-gray-600 truncate">
