@@ -200,7 +200,20 @@ def _build_user_prompt(
     has_critical  = fn_count > 0
     has_moderate  = (ai_openings + buzzwords) >= 2
     has_minor     = transitions >= 2
-    is_clean      = total_issues == 0
+
+    # The text_cleaner scan above only knows phrases and negation contrasts.
+    # The structural tells live in services.tells; without counting them here a
+    # draft full of them was reported as "no AI patterns", and the model was
+    # told to leave it alone.
+    tell_count = 0
+    try:
+        from services.tells import tell_report
+        tell_count = tell_report(content)["effective_count"]
+    except Exception as e:  # pragma: no cover - detector must never block a run
+        log.warning("Tell scan unavailable (non-fatal): %s", e)
+
+    has_tells     = tell_count > 0
+    is_clean      = total_issues == 0 and not has_tells
 
     # ── Content ka honest assessment ─────────────────────────────────────────
     if is_clean:
@@ -245,6 +258,18 @@ def _build_user_prompt(
             "  • Rewrite sentences containing these patterns naturally\n"
             "  • Keep sentences that already sound human\n"
             "  • Do not over-edit — fix only what needs fixing"
+        )
+    elif has_tells and total_issues == 0:
+        assessment = (
+            f"🟡 PRE-SCAN: {tell_count} structural AI writing pattern(s) found. "
+            "They are listed under WRITING PATTERNS FOUND below."
+        )
+        task_block = (
+            "TASK: Rewrite every sentence listed under WRITING PATTERNS FOUND.\n"
+            "  • Each one is a real tell. Do not leave any of them as written\n"
+            "  • State the point directly instead of staging it, contrasting it\n"
+            "    or listing it in threes\n"
+            "  • Keep every fact, number and name. Leave other sentences alone"
         )
     else:
         assessment = (

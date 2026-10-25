@@ -182,7 +182,11 @@ def describe(profile: dict | None) -> str:
 
     fp = profile["first_person_per_100"]
     if fp >= 2.0:
-        lines.append(f"  - Writes in first person ({fp} per 100 words). Use I and we.")
+        lines.append(
+            f"  - Writes in first person ({fp} per 100 words). Use I and we for what "
+            "the brand document itself states about the brand, and never claim "
+            "experience, clients or events it does not state."
+        )
     elif fp <= 0.3:
         lines.append("  - Avoids first person. Keep the writing impersonal.")
 

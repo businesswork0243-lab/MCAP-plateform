@@ -59,6 +59,7 @@ COMPLIANCE NOTES:
 
 {document_context}
 {example_block}
+{voice_block}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BRAND ALIGNMENT RULES:
 1. Replace ALL banned phrases with brand-appropriate alternatives
@@ -255,6 +256,25 @@ follow the uploaded documents.
             + "\n\n---\n\n".join(examples[:3])[:3000]
         )
 
+    # The writer is given the brand's measured rhythm, but the platform pass
+    # that follows compresses the draft and the rhythm is lost with it. This
+    # is the stage that restores brand voice, so it gets the target too.
+    voice_block = ""
+    try:
+        from services.voice import measure, describe
+        described = describe(measure(doc_context))
+        if described:
+            voice_block = (
+                "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + chr(10)
+                + described + chr(10) + chr(10)
+                + "Move the content toward this rhythm without adding facts or "
+                "changing its length much. It is a centre of gravity, not a rule "
+                "for every line." + chr(10)
+                + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            )
+    except Exception as e:  # pragma: no cover - measurement must never block
+        log.warning("Voice measurement unavailable (non-fatal): %s", e)
+
     user_prompt = USER_TEMPLATE.format(
         content=content,
         brand_name=brand_profile.get("name", "Unknown Brand"),
@@ -277,6 +297,7 @@ follow the uploaded documents.
             or "None specified"
         ),
         example_block=example_block,
+        voice_block=voice_block,
         tone_description=_build_tone_description(tone_settings),
         formality=formality,
         formality_label=_tone_label(formality, "Casual", "Semi-formal", "Formal"),

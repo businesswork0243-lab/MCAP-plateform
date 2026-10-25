@@ -105,6 +105,35 @@ def _is_protected(start: int, spans: list[tuple[int, int]]) -> bool:
     return any(a <= start < b for a, b in spans)
 
 
+# ─── Scripts ──────────────────────────────────────────────────────────────────
+# A video or podcast script is not prose. Its stage directions and timestamped
+# section headers are furniture, and its short lines are spoken delivery rather
+# than a post built out of one-liners. Reading it as prose flagged a script's
+# ordinary pacing as the staccato tell: the same draft scored 6 tells as plain
+# text and 17 once the model wrote it as a script.
+_SCRIPT_FURNITURE = re.compile(
+    r"\[(?:PAUSE|BEAT|VISUAL CUE|B-?ROLL|CUT TO|ON[- ]SCREEN|MUSIC|SFX|TEXT ON SCREEN)[^\]\n]*\]"
+    r"|(?m:^[ \t]*\*{0,2}[^\n]{0,100}\(\d+:\d{2}\s*[\u2013\u2014-]\s*\d+:\d{2}\)\*{0,2}[ \t]*$)",
+    re.I,
+)
+
+# Cadence detectors: short standalone lines are how a script is spoken.
+_SCRIPT_EXEMPT = frozenset({"TELL02", "TELL25", "TELL26"})
+
+
+def _mask_script(text: str) -> tuple[str, bool]:
+    """The text with script furniture blanked out (same length), and whether it is a script."""
+    hits = list(_SCRIPT_FURNITURE.finditer(text))
+    if len(hits) < 2:
+        return text, False
+    chars = list(text)
+    for m in hits:
+        for i in range(m.start(), m.end()):
+            if chars[i] != "\n":
+                chars[i] = " "
+    return "".join(chars), True
+
+
 # ─── Structural finders ───────────────────────────────────────────────────────
 
 _CLOSER_PHRASES = re.compile(
@@ -347,6 +376,9 @@ PATTERNS: list[Pattern] = [
             r"(?i)\bwithout further ado\b",
             r"(?im)^(here'?s the thing|the thing is|real talk|look,|honestly\?)",
             r"(?i)\bnow let'?s look at\b",
+            r"(?i)\bnotice what['’]?s (missing|different|absent)\b",
+            r"(?im)^the (harder|uncomfortable|honest|real) truth:",
+            r"(?i)\bhere['’]?s the (kicker|catch)\b",
         ],
     ),
     Pattern(
@@ -546,8 +578,77 @@ PATTERNS: list[Pattern] = [
             # "The state is accelerant and beneficiary, not sole cause." —
             # the same contrast, run backwards as a trailing appositive.
             r"(?i),\s+not\s+(?:a|an|the)?\s*[\w][\w '\-]{2,30}\.(?=\s|$)",
+            # "Web3 never had a business model. It had a token." — the
+            # negation is "never had" rather than "is not", so the two
+            # patterns above cannot see it.
+            r"(?i)\b(?:never|doesn['’]t|don['’]t|didn['’]t|hasn['’]t|hadn['’]t)\s+"
+            r"(?:had|have|has|need|needed|want|wanted)\s+[^.!?\n]{2,60}[.;]\s+"
+            r"(?:it|they|this|that|we|he|she)\s+(?:had|has|have|needed|wanted)\b",
+            # "this downturn isn't a normal bear market." — the denied noun
+            # is a stock "normal/typical" foil that exists only to be swapped.
+            r"(?i)\b(?:isn['’]t|aren['’]t|wasn['’]t|weren['’]t)\s+"
+            r"(?:a|an|the|your)\s+(?:normal|typical|ordinary|usual|regular|standard)\b",
         ],
         solo_threshold=1,
+    ),
+    Pattern(
+        "TELL30", "30", "Signature AI phrases", STRONG,
+        regexes=[
+            r"(?i)\bin (?:today['’]s|an? (?:increasingly|rapidly)) [\w ,-]{0,40}"
+            r"(?:world|landscape|era|age)\b",
+            r"(?i)\bin an increasingly interconnected\b",
+            r"(?i)\bat the forefront of\b",
+            r"(?i)\bunlock(?:ing)? the (?:full )?(?:potential|power)\b",
+            r"(?i)\bunlock(?:ing|s)? unprecedented\b",
+            r"(?i)\bpav(?:e|es|ed|ing) the way (?:for|to)\b",
+            r"(?i)\ba game[- ]?changer\b",
+            r"(?i)\bthe possibilities are (?:endless|limitless)\b",
+            r"(?i)\bthis is where .{2,40} comes? into play\b",
+            r"(?i)\bit['’]?s (?:important|worth) (?:to )?(?:note|noting|mention|mentioning)\b",
+            r"(?i)\bit is (?:important|worth) (?:to )?(?:note|noting|mention|mentioning)\b",
+            r"(?i)\bdelve(?:s|d)?(?: deeper)?\b",
+            r"(?i)\ba testament to\b",
+            r"(?i)\bbridg(?:e|es|ing) the gap\b",
+            r"(?i)\bthe future is (?:brighter|bright)\b",
+            r"(?i)\bthe question is no longer\b",
+            r"(?i)\bno longer a (?:distant )?(?:possibility|dream)\b",
+            r"(?i)\bas we (?:stand at|navigate|move toward|look ahead)\b",
+            r"(?i)\bat the intersection of\b",
+            r"(?i)\ba paradigm shift\b",
+            r"(?i)\bwhile challenges remain\b",
+            r"(?i)\bthe immense potential\b",
+            r"(?i)\bever[- ]evolving\b",
+        ],
+    ),
+    Pattern(
+        "TELL31", "31", "Overused AI vocabulary", STRONG,
+        regexes=[
+            r"(?i)\b(?:revolutionary|transformative|unprecedented|unparalleled|"
+            r"multifaceted|synergy|synergies|undoubtedly|cutting[- ]edge)\b",
+            r"(?i)\b(?:seamless|seamlessly)\b",
+            r"(?i)\b(?:reimagin|redefin)(?:e|es|ed|ing)\b",
+        ],
+    ),
+    Pattern(
+        "TELL32", "32", "Corporate filler words", WEAK,
+        regexes=[
+            r"(?i)\b(?:leverag(?:e|es|ed|ing)|empower(?:s|ed|ing)?|harness(?:es|ed|ing)?|"
+            r"foster(?:s|ed|ing)?|elevat(?:e|es|ed|ing)|facilitat(?:e|es|ed|ing)|"
+            r"unlock(?:s|ed|ing)?)\b",
+            r"(?i)\b(?:robust|holistic|innovative|disruptive|pivotal|catalyst|"
+            r"interconnected|paradigm|ecosystem|landscape)\b",
+        ],
+        solo_threshold=2,
+    ),
+    Pattern(
+        "TELL33", "33", "Polished transitions", WEAK,
+        regexes=[
+            r"(?im)(?:^|(?<=[.!?]\s))(?:moreover|furthermore|additionally|in addition|"
+            r"nevertheless|nonetheless|in essence|fundamentally|essentially|"
+            r"notably|importantly|ultimately|in conclusion|moving forward|"
+            r"as we look ahead)\b,?",
+        ],
+        solo_threshold=2,
     ),
 ]
 
@@ -561,10 +662,16 @@ def find_tells(text: str) -> list[dict]:
     if not text or not text.strip():
         return []
 
+    # Offsets are preserved, so spans still index into the caller's text.
+    original = text
+    text, is_script = _mask_script(text)
+
     protected = _protected_spans(text)
     found: list[Tell] = []
 
     for pattern in PATTERNS:
+        if is_script and pattern.id in _SCRIPT_EXEMPT:
+            continue
         for rx in pattern.regexes:
             for m in re.finditer(rx, text):
                 if _is_protected(m.start(), protected):

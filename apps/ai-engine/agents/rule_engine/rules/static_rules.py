@@ -157,6 +157,16 @@ STATIC_RULES: list[Rule] = [
             "If no verified profile was supplied, flag EVERY first-person "
             "experience claim. An engaging story built on invented experience "
             "is a critical failure, not a stylistic preference.",
+            "",
+            "Two things are NOT violations:",
+            "  - A claim that restates the 'Verified brand material' section, "
+            "including the uploaded brand document, whether it is written as "
+            "'we', 'our', 'I' or in the third person ('a fund once lost three "
+            "days' when the document says so). Check that section before "
+            "flagging anything.",
+            "  - Opinion and rhetorical first person: 'I think', 'I would argue', "
+            "'let me be direct', 'I should be honest'. Only claims of FACT about "
+            "the author or their organisation count.",
         ]),
         weight=0.20,
         examples={

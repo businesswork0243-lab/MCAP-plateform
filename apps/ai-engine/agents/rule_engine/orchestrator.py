@@ -80,6 +80,15 @@ class RuleEngineOrchestrator:
             dynamic_rules, brand_data, extra_context
         )
 
+        # The validator needs the brand's own facts to judge first-person
+        # claims; without them every "we" sentence reads as invented.
+        try:
+            from services.verified_facts import build_verified_material
+            verified_material = build_verified_material(brand_data)
+        except Exception as e:  # pragma: no cover - never block a run on this
+            log.warning("[RuleEngine] verified material unavailable: %s", e)
+            verified_material = ""
+
         # False negative tracking
         initial_fn_count = 0
         final_fn_count   = 0
@@ -96,6 +105,7 @@ class RuleEngineOrchestrator:
                 content=current,
                 iteration=iteration,
                 dynamic_rules=dynamic_rules.rules,
+                verified_material=verified_material,
             )
 
             fn_count = sum(

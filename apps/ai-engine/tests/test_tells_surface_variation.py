@@ -196,3 +196,50 @@ def test_numeric_range_dash_is_not_a_connector():
 def test_word_dash_word_still_counts():
     text = "The desk repriced\u2014twice\u2014before the close, and nobody logged it."
     assert "TELL08" in {t["id"] for t in tell_report(text)["tells"]}
+
+
+# ─── Blacklist of stock AI phrasing and vocabulary ────────────────────────────
+
+def test_never_had_x_it_had_y_is_a_contrast_swap():
+    assert "TELL29" in _tell_ids("Web3 never had a business model. It had a token.")
+
+
+def test_isnt_a_normal_foil_is_a_contrast_swap():
+    assert "TELL29" in _tell_ids("This downturn isn't a normal bear market. Weak firms die.")
+
+
+def test_signature_phrases_and_vocabulary_are_flagged():
+    text = (
+        "In today's rapidly evolving digital landscape, blockchain is a "
+        "transformative force. The possibilities are endless."
+    )
+    assert {"TELL30", "TELL31"} <= _tell_ids(text)
+
+
+def test_single_corporate_filler_word_alone_is_not_enough():
+    assert "TELL32" not in {
+        t["id"] for t in __import__("services.tells", fromlist=["tell_report"])
+        .tell_report("The ecosystem grew last year.")["effective"]
+    }
+
+
+# ─── Scripts are not prose ────────────────────────────────────────────────────
+
+_SCRIPT = (
+    "**HOOK (0:00\u20130:30)**\n\nMost projects had no customers. None at all. Zero.\n\n"
+    "**INTRO (0:30\u20131:00)**\n\nA sale closes in a week. [PAUSE] No product yet. No team. No plan.\n\n"
+    "[VISUAL CUE: split screen]\n\nThe money was real."
+)
+
+
+def test_script_cadence_is_not_flagged_as_staccato_prose():
+    assert not ({"TELL02", "TELL25", "TELL26"} & _tell_ids(_SCRIPT))
+
+
+def test_same_lines_without_script_markers_are_still_flagged():
+    plain = "Most projects had no customers. None at all. Zero.\n\nNo product yet. No team. No plan."
+    assert "TELL02" in _tell_ids(plain)
+
+
+def test_stage_directions_are_not_scanned():
+    assert "TELL08" not in _tell_ids(_SCRIPT)

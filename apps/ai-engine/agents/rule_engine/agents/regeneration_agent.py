@@ -19,6 +19,13 @@ SURGICAL REWRITE RULES:
 4. COPY the rest of the text EXACTLY as it is.
 5. Return the full content. Do not truncate or summarize.
 
+NO NEW FACTS (ABSOLUTE):
+Fix a sentence by rephrasing or cutting it, never by adding to it. Do not
+introduce any name, company, number, date, source or example that is not already
+in the text, and do not add "according to ..." attributions. If a flagged
+sentence cannot be fixed without inventing something, cut the sentence or
+restate its own claim in plainer words. Keep every claim the original made.
+
 FALSE NEGATIVE FIXING (CRITICAL):
 Convert EVERY "not X, it's Y" construction into a DIRECT POSITIVE assertion.
   BAD:  "It's not a cost, it's an investment."

@@ -30,10 +30,10 @@ GROUNDING_FAIL_CAP = 55.0
 
 # Writing tells deduct score, but only genuinely tell-ridden output is failed
 # outright. The frozen corpus sits at 2.44 effective tells per 100 words, so
-# this fires at roughly two and a half times our own current writing — rare
-# enough that it does not add a regeneration pass to ordinary pieces, which
-# would cost a call and 40 seconds each time.
-TELL_DENSITY_FAIL = 6.0
+# at 2.0 most generated drafts get one surgical rewrite pass. That costs a call
+# per piece and is deliberate: at the earlier 6.0 nothing ever triggered, and a
+# post with 7 visible tells (3.7 per 100) shipped as a clean 91/100.
+TELL_DENSITY_FAIL = 2.0
 TELL_DENSITY_CAP = 64.0   # just under PASS_THRESHOLD, so regeneration runs
 
 # Only this many tell violations are reported per piece. Beyond it the list
@@ -93,10 +93,14 @@ class StaticValidatorAgent:
         content:       str,
         iteration:     int               = 1,
         dynamic_rules: list[Rule] | None = None,
+        verified_material: str           = "",
     ) -> ValidationResult:
 
         dynamic_rules = dynamic_rules or []
         start         = time.time()
+        # What the brand has told us about itself. Without it a grounding rule
+        # cannot tell a supported "we" claim from an invented one.
+        self._verified_material = verified_material or ""
 
         log.info(
             "[Validator] Iter %d | static=%d | dynamic=%d",
@@ -311,9 +315,21 @@ class StaticValidatorAgent:
 
         priority_block = f"\n⚠️  PRIORITY: {priority}\n" if priority else ""
 
+        # Only batches that contain a grounding rule need the brand's facts.
+        material_block = ""
+        material = getattr(self, "_verified_material", "")
+        if material and any(r.id in GROUNDING_RULE_IDS for r in rules):
+            material_block = (
+                "\n## Verified brand material\n"
+                "A claim that restates this material is SUPPORTED and is not a "
+                "violation, including a company-voice 'we' or 'our' about things "
+                "it states. Flag only claims that go beyond it.\n"
+                '"""\n' + material + '\n"""\n'
+            )
+
         prompt = f"""{priority_block}
 Evaluate this content against the rules below.
-
+{material_block}
 ## Rules:
 {rules_json}
 

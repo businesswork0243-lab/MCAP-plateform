@@ -175,8 +175,17 @@ def test_tell_ridden_content_is_capped_below_the_pass_mark(validator):
 
 
 def test_ordinary_content_is_not_capped_by_density(validator):
-    """The cap is for tell-ridden output, not for our own current writing."""
-    density = tell_report(REAL_DRAFT)["per_100_words"]
+    """The cap is for tell-ridden output, not for our own current writing.
+
+    Uses a full-length corpus draft: REAL_DRAFT is 37 words, where two genuine
+    tells already read as 5.4 per 100 and say nothing about ordinary pieces.
+    """
+    from pathlib import Path
+    draft = (
+        Path(__file__).resolve().parent.parent
+        / "eval" / "corpus" / "generated" / "beginner-react-story-linkedin.txt"
+    ).read_text(encoding="utf-8")
+    density = tell_report(draft)["per_100_words"]
     assert density < TELL_DENSITY_FAIL
 
 

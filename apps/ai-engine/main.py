@@ -22,6 +22,7 @@ from agents.rule_engine import RuleEngineOrchestrator
 from services.scoring         import score as score_content
 from services.prompt_compiler import PDLRequest, compile as compile_prompt
 from services.pre_generation_validator import validate_and_fix
+from services.verified_facts import build_verified_facts
 
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -143,41 +144,8 @@ async def run_with_timeout(coro, timeout: int = PIPELINE_TIMEOUT):
 # ── Safe extractors ───────────────────────────────────────────────────────────
 
 def _build_verified_facts(profile: Optional[dict]) -> str:
-    """Flatten the brand profile into the fact list agents check against.
-
-    Agents previously received voice and vocabulary but no biography, so they
-    had nothing to test a first-person claim against.
-    """
-    if not profile:
-        return ""
-    lines: list[str] = []
-    for label, key in (
-        ("Name",         "name"),
-        ("Industry",     "industry"),
-        ("Website",      "website"),
-        ("Positioning",  "positioning"),
-        ("Mission",      "mission"),
-        ("Vision",       "vision"),
-        ("Life purpose", "life_purpose"),
-        ("Description",  "description"),
-    ):
-        val = profile.get(key)
-        if val:
-            lines.append(f"{label}: {val}")
-
-    for label, key in (
-        ("Key messages",      "key_messages"),
-        ("Value propositions", "value_propositions"),
-        ("Core values",       "core_values"),
-        ("Stands for",        "stands_for"),
-        ("Stands against",    "stands_against"),
-    ):
-        val = profile.get(key)
-        if isinstance(val, list) and val:
-            joined = "; ".join(str(v) for v in val[:10])
-            lines.append(f"{label}: {joined}")
-
-    return NEWLINE.join(lines)
+    """Flatten the brand profile into the fact list agents check against."""
+    return build_verified_facts(profile)
 
 
 def _extract_rule_engine_meta(item) -> dict:

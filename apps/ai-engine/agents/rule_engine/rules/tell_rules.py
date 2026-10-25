@@ -44,6 +44,10 @@ TELL_RULE_IDS: dict[str, str] = {
     "TELL27": "SR041",   # Engagement-bait closing question
     "TELL28": "SR042",   # Listicle promise
     "TELL29": "SR043",   # Contrast swap without the contrast word
+    "TELL30": "SR044",   # Signature AI phrases
+    "TELL31": "SR045",   # Overused AI vocabulary
+    "TELL32": "SR046",   # Corporate filler words
+    "TELL33": "SR047",   # Polished transitions
 }
 
 # What the writer should do instead. The regeneration agent passes these
@@ -85,7 +89,11 @@ FIXES: dict[str, str] = {
     "TELL26": "Vary how consecutive paragraphs open. Three in a row on the same word reads as a generated list.",
     "TELL27": "Delete the closing question. If the piece has a point, end on it rather than asking the reader to supply one.",
     "TELL28": "Drop the count. Make the points without announcing how many are coming.",
-    "TELL29": "State the positive claim on its own. Replacing one noun with another across a full stop is the same contrast move as 'not X but Y'.",
+    "TELL29": "Fold both halves into ONE sentence that keeps both facts. Do not delete the denied half: it is the claim. Example: 'Web3 never had a business model. It had a token.' -> 'Web3 never had a business model beyond selling its own token.'",
+    "TELL30": "Delete the stock phrase and state the specific claim it was gesturing at. If nothing specific remains, cut the sentence.",
+    "TELL31": "Replace the inflated word with the plain one, or with the concrete fact it was standing in for.",
+    "TELL32": "Use the plain verb or noun: use, help, build, grow, market, area.",
+    "TELL33": "Drop the transition. If the next sentence follows from the last, it does not need announcing.",
 }
 
 # Style rules deliberately weigh less than grounding. A dash is a matter of
