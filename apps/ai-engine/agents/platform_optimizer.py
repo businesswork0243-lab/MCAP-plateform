@@ -1,212 +1,173 @@
-"""Agent 2 — Platform Optimizer: adapts canonical draft to channel-specific format."""
+"""Agent 2 — Platform Optimizer: writes the piece natively for each channel.
+
+The first version of this agent was told to "transform" the article and was only
+allowed to cut and reorder it. That produces excerpts: every short format came
+out as the same four sentences from the article, differently trimmed. It now
+works in three steps.
+
+  1. `build_brief` reads the article once and extracts the thesis, the points
+     worth making, the evidence, and the lines worth quoting. Every platform
+     writes from this one brief, so the formats agree with each other without
+     copying each other.
+  2. `run` writes the piece for one channel from that brief, following the
+     format's craft notes in `services.format_specs`.
+  3. The result is checked against the format by code (length, characters,
+     hashtags, copied sentences, placeholders). If it fails, one repair call
+     fixes exactly what failed.
+
+The no-new-facts rule is unchanged and stays the first thing the model reads.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import re
+
 from services.llm import complete
+from services import format_specs
+
+log = logging.getLogger("ai-engine.platform_optimizer")
 
 NL = chr(10)
 
-SYSTEM = """You are an expert content strategist specializing in platform-specific optimization.
-You understand the unique formatting, pacing, algorithm behavior, and stylistic conventions of each publishing channel.
-Transform content to fit the platform perfectly while preserving the core strategic message.
-OUTPUT: Write only the final optimized content. No meta-commentary, no labels, no preamble.
+SYSTEM = """You are a writer who has published on every channel you are asked to write for.
+You write each piece as if it had been written for that channel from the start. You do not summarise an article and you do not paste excerpts from it.
 
-ADAPTATION LIMITS - these bind every rewrite:
-1. You may cut, compress, reorder and reformat. You may NOT add any fact,
-   claim, number, credential or experience that is absent from the draft.
-   Shortening must never introduce something new.
-2. Any MUST-PRESERVE item listed in the prompt has to survive into the final
-   output. Cut elsewhere to make room; those items are not optional.
-3. Where the draft is vague, keep it vague. Do not sharpen an unsourced claim
-   into a confident specific one."""
+THE ONE RULE THAT OVERRIDES THE REST: you may not add any fact, number, name, credential, anecdote or experience that is not in the source material. You may rephrase, reorder, cut, emphasise and put things in new words. Where the source is vague, stay vague. If a format asks for something the source does not contain (a testimonial, a statistic, a bio), leave it out or mark the slot, never invent it.
 
-# ─── Platform Specifications ──────────────────────────────────────────────────
+HOW YOU WRITE
+- Start from the idea, not from the article's sentences. Say it in this format's own voice.
+- Be specific. Every piece contains at least one concrete detail from the source (a mechanism, a number, a named case). A piece that is all claims and no detail is not finished.
+- One thesis per piece. If the format is short, drop points; do not compress all of them into slogans.
+- Vary sentence length. Do not build a piece from a run of very short lines, and do not end paragraphs on a line that only restates the one before it.
+- Say what something is. Do not set up a contrast by first saying what it is not.
+- Plain words. No filler openers such as "In today's world", and none of: leverage, unlock, transformative, seamless, robust, game-changer.
+- Any MUST-PRESERVE item in the prompt survives into the piece.
 
-PLATFORM_SPECS = {
-    "linkedin_post": {
-        "name": "LinkedIn Post",
-        "length": "150-300 words",
-        "rules": [
-            "Start with ONE bold hook line — visible before 'see more' click",
-            "Then press Enter twice — white space is critical on LinkedIn",
-            "Short paragraphs: 1-2 sentences maximum",
-            "Mix sentence lengths for rhythm",
-            "Professional but conversational — not corporate",
-            "End with ONE discussion question or CTA",
-            "Max 3-5 relevant hashtags at the very end (separate line)",
-            "Avoid bullet-point overuse",
-            "Total: 150-300 words",
-        ],
-    },
-    "linkedin_article": {
-        "name": "LinkedIn Article",
-        "length": "800-1200 words",
-        "rules": [
-            "Clear, value-signaling headline",
-            "Structured with H2/H3 subheadings every 2-3 paragraphs",
-            "Professional thought leadership tone",
-            "Data points and concrete examples throughout",
-            "End with 3-5 key takeaways in a bullet list",
-            "Author bio paragraph at the end",
-        ],
-    },
-    "x_post": {
-        "name": "X (Twitter) Post",
-        "length": "240-280 characters",
-        "rules": [
-            "Single punchy insight, question, or provocative statement",
-            "Conversational and direct — like you're texting",
-            "Zero to one hashtag maximum",
-            "Count characters — hard limit 280",
-            "No threads — standalone single post only",
-        ],
-    },
-    "x_thread": {
-        "name": "X Thread",
-        "length": "8-12 tweets, each under 280 characters",
-        "rules": [
-            "Tweet 1: Most provocative/surprising hook — makes people NEED to read more",
-            "Tweets 2-10+: One idea per tweet, numbered (2/10, 3/10...)",
-            "Each tweet must deliver standalone value — not cliffhangers",
-            "Last tweet: Summary + single CTA",
-            "Separate each tweet with a line: ---",
-            "STRICT: Each tweet under 280 characters",
-        ],
-    },
-    "twitter_thread": {
-        # Alias for x_thread
-        "name": "Twitter/X Thread",
-        "length": "8-12 tweets, each under 280 characters",
-        "rules": [
-            "Tweet 1: Bold hook — most provocative point up front",
-            "Tweets 2-10+: One idea per tweet, numbered format",
-            "Each tweet delivers value on its own",
-            "Final tweet: Summary + CTA",
-            "Separate tweets with: ---",
-            "Hard limit: 280 characters per tweet",
-        ],
-    },
-    "blog_post": {
-        "name": "Blog Post",
-        "length": "Follows word count specification",
-        "rules": [
-            "SEO-optimized headline (include primary keyword if specified)",
-            "Introduction: address a pain point in the first 100 words",
-            "Use H2/H3 subheadings every 2-3 paragraphs",
-            "Include practical, actionable sections",
-            "Use numbered lists or bullets for steps/tips",
-            "Conclusion with summary + CTA",
-            "Add meta description suggestion at the very end (under META DESCRIPTION: label)",
-        ],
-    },
-    "newsletter": {
-        "name": "Newsletter",
-        "length": "400-700 words",
-        "rules": [
-            "SUBJECT LINE: [Write subject line here] — as the very first line",
-            "Warm, personal opening — as if writing to a close colleague",
-            "Short paragraphs — easy to skim on mobile",
-            "One main insight or story per newsletter",
-            "Personal observation or aside somewhere in the middle",
-            "Clear CTA or next step at the end",
-            "Sign-off with name/persona",
-        ],
-    },
-    "instagram_caption": {
-        "name": "Instagram Caption",
-        "length": "125-150 words (displayed) + hashtags",
-        "rules": [
-            "First line is the HOOK — must be compelling before 'more' is clicked",
-            "Line breaks between key thoughts for readability",
-            "Conversational, authentic voice — not corporate",
-            "Emojis used sparingly and purposefully (2-4 total)",
-            "End with a question to drive comments",
-            "Hashtags section at the end: 10-15 relevant hashtags on separate lines",
-            "Total visible text: 125-150 words",
-        ],
-    },
-    "youtube_script": {
-        "name": "YouTube Script",
-        "length": "800-1200 words (approx. 5-8 minute video)",
-        "rules": [
-            "HOOK (0-30 sec): Start with the payoff — what viewers will learn",
-            "Brief intro: Establish credibility and topic in under 30 seconds",
-            "Main content: 3-5 sections with clear transitions",
-            "Use [VISUAL CUE] markers where relevant graphics/cuts should appear",
-            "Conversational spoken language — write how you talk, not how you write",
-            "Include [PAUSE] markers for emphasis",
-            "CTA before outro (30 seconds from end)",
-            "OUTRO: Subscribe ask + preview next video",
-            "Format: Clearly label HOOK, INTRO, SECTION 1, etc.",
-        ],
-    },
-    "podcast_notes": {
-        "name": "Podcast Show Notes & Talking Points",
-        "length": "400-600 words",
-        "rules": [
-            "Episode title suggestion at top",
-            "Episode summary (2-3 sentences for podcast apps)",
-            "TALKING POINTS section with 5-8 key discussion points as bullets",
-            "Each talking point has 1-2 sub-bullets with detail",
-            "KEY QUOTES section: 2-3 quotable one-liners from the content",
-            "RESOURCES MENTIONED section (placeholder)",
-            "CTA for listeners at the end",
-        ],
-    },
-    "landing_page": {
-        "name": "Landing Page Copy",
-        "length": "300-600 words",
-        "rules": [
-            "HEADLINE: Single-line value proposition",
-            "SUBHEADLINE: Expand the promise in 1-2 sentences",
-            "3 benefit bullets (outcome-focused, not feature-focused)",
-            "[TESTIMONIAL PLACEHOLDER]",
-            "One clear CTA button text",
-            "Optional: urgency or scarcity element",
-        ],
-    },
-    "executive_brief": {
-        "name": "Executive Brief",
-        "length": "300-500 words",
-        "rules": [
-            "TL;DR: 2-3 sentence summary at the very top",
-            "Formal, direct tone — executives are busy",
-            "KEY FINDINGS or RECOMMENDATIONS as labeled bullets",
-            "Business impact focus: ROI, risk, opportunity",
-            "ACTION ITEMS section at the end",
-        ],
-    },
-    "whatsapp_status": {
-        "name": "WhatsApp Status / Short Message",
-        "length": "50-80 words",
-        "rules": [
-            "Ultra-short — 50-80 words maximum",
-            "One powerful insight or statement",
-            "No hashtags",
-            "Casual, direct voice",
-            "Works as a standalone message",
-        ],
-    },
-}
+OUTPUT: the finished piece only. No preamble, no labels such as "Here is", no commentary."""
 
-# ─── Prompt Template ──────────────────────────────────────────────────────────
+BRIEF_SYSTEM = """You extract a writing brief from an article so that several different formats can be written from it without repeating each other.
+Return ONLY valid JSON. Use only what the article says; add nothing."""
 
-USER_TEMPLATE = """Transform this canonical article into optimized {platform_name} content.
+BRIEF_TEMPLATE = """ARTICLE:
+{article}
 
-CANONICAL ARTICLE:
-{canonical_draft}
+Return JSON with exactly these keys:
+{{
+  "thesis": "the single claim of the piece, one sentence, in plain words",
+  "reader": "who this is for and what they currently believe or do",
+  "points": ["3 to 6 distinct supporting points, each one sentence, in the order of the argument"],
+  "evidence": ["concrete details the article gives: mechanisms, numbers, named cases, examples. Empty list if none"],
+  "quotable": ["2 to 4 short lines from the article worth quoting as written"],
+  "cta": "what the article asks the reader to do, or empty string"
+}}"""
+
+USER_TEMPLATE = """Write a {platform_name} from the material below.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TARGET PLATFORM: {platform_name}
-LENGTH: {length}
+WRITING BRIEF (the ideas to work from)
+{brief}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FULL ARTICLE (source of truth for every fact; do not copy its sentences)
+{canonical_draft}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FORMAT: {platform_name}   LENGTH: {length}
+{voice_block}
+HOW TO WRITE IT
+{format_brief}
 
-PLATFORM RULES:
+FORMAT RULES
 {rules}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 {extra_instructions}
+Write the {platform_name} now:"""
 
-Write the optimized {platform_name} content now:"""
+REPAIR_TEMPLATE = """This {platform_name} was written, but it breaks the format. Fix ONLY the problems listed and keep everything else as it is.
+
+PROBLEMS
+{problems}
+
+THE PIECE
+{content}
+
+Rules: do not add any new fact; keep the same ideas and voice; keep the format conventions ({rules}).
+Return only the corrected piece."""
 
 
-# ─── Agent Entry Point ────────────────────────────────────────────────────────
+def _voice_block(voice_target: str) -> str:
+    """The brand's measured rhythm, when there is one to give."""
+    if not voice_target or not voice_target.strip():
+        return ""
+    return (
+        NL + voice_target.strip() + NL
+        + "Treat this as the rhythm to write toward, in your own sentences. If the brand writes "
+        "in first person and the article contains first-person statements ('we', 'our'), a "
+        "first-person line that restates one of them in new words suits the voice. Never add "
+        "a first-person claim the article does not make." + NL
+    )
+
+
+# ─── Brief ────────────────────────────────────────────────────────────────────
+
+def _parse_json(raw: str) -> dict | None:
+    raw = (raw or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw)
+    start, end = raw.find("{"), raw.rfind("}")
+    if start == -1 or end <= start:
+        return None
+    try:
+        data = json.loads(raw[start:end + 1])
+    except json.JSONDecodeError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def format_brief(brief: dict | None) -> str:
+    """The brief as text for a prompt, or a note that there is none."""
+    if not brief:
+        return "(no separate brief; work from the article below)"
+
+    def bullets(items) -> str:
+        items = [str(i).strip() for i in (items or []) if str(i).strip()]
+        return NL.join(f"  - {i}" for i in items) if items else "  (none)"
+
+    return NL.join([
+        f"Thesis: {brief.get('thesis', '')}",
+        f"Reader: {brief.get('reader', '')}",
+        "Points:" + NL + bullets(brief.get("points")),
+        "Evidence:" + NL + bullets(brief.get("evidence")),
+        "Lines worth quoting (use at most one, exactly as written):" + NL + bullets(brief.get("quotable")),
+    ])
+
+
+async def build_brief(canonical_draft: str) -> tuple[dict | None, int]:
+    """One cheap call that every platform then shares. None on any failure.
+
+    Failure is never fatal: each platform falls back to the article alone, which
+    is how the agent worked before.
+    """
+    if not canonical_draft or len(canonical_draft.split()) < 60:
+        return None, 0
+    try:
+        raw, tokens = await complete(
+            BRIEF_SYSTEM,
+            BRIEF_TEMPLATE.format(article=canonical_draft[:14000]),
+            temperature=0.2,
+            max_tokens=900,
+        )
+    except Exception as e:
+        log.warning("Brief extraction failed (non-fatal): %s", e)
+        return None, 0
+
+    brief = _parse_json(raw)
+    if not brief or not brief.get("thesis"):
+        log.warning("Brief extraction returned unusable JSON (non-fatal)")
+        return None, tokens
+    return brief, tokens
+
+
+# ─── Agent entry point ────────────────────────────────────────────────────────
 
 async def run(
     canonical_draft: str,
@@ -214,60 +175,99 @@ async def run(
     audience_note:   str        = "",
     word_count:      int | None = None,
     seo_enabled:     bool       = False,
-    seo_settings:    dict       = None,
+    seo_settings:    dict | None = None,
     cta:             str        = "",
     must_preserve:   str        = "",
+    brief:           dict | None = None,
+    voice_target:    str        = "",
 ) -> dict:
-    """
-    Adapt canonical draft to target platform format.
-    """
-    spec = PLATFORM_SPECS.get(
-        target_platform.lower().replace(" ", "_").replace("-", "_"),
-        PLATFORM_SPECS["linkedin_post"]
-    )
-
-    rules_text = "\n".join(f"  • {r}" for r in spec["rules"])
+    """Write the canonical article's ideas as `target_platform` content."""
+    spec = format_specs.get_spec(target_platform)
 
     extra_parts = []
     if must_preserve and must_preserve.strip():
-        # Compression used to quietly drop strategic framing the user had
-        # explicitly asked for, because this agent never saw the request.
+        # Compression used to drop strategic framing the user had asked for,
+        # because this agent never saw the request.
         extra_parts.append(
-            "MUST-PRESERVE (from the original request - these survive the cut):"
+            "MUST-PRESERVE (from the original request; these survive the cut):"
             + NL + must_preserve.strip()
         )
     if audience_note:
-        extra_parts.append(f"AUDIENCE NOTE:\n{audience_note}")
+        extra_parts.append(f"AUDIENCE NOTE:{NL}{audience_note}")
     if cta:
-        extra_parts.append(f"CALL TO ACTION:\n{cta}")
+        extra_parts.append(f"CALL TO ACTION:{NL}{cta}")
     if word_count:
-        extra_parts.append(f"TARGET LENGTH GUIDANCE: Aim for approximately {word_count} words.")
+        extra_parts.append(f"TARGET LENGTH: about {word_count} words.")
     if seo_enabled and seo_settings:
         from services.prompt_compiler import _build_seo_block
         seo_text = _build_seo_block(seo_enabled, seo_settings)
         if seo_text:
             extra_parts.append(seo_text)
-
-    extra_instructions = (NL + NL).join(extra_parts) if extra_parts else ""
+    extra_instructions = (NL + NL).join(extra_parts)
 
     user_prompt = USER_TEMPLATE.format(
-        platform_name=spec["name"],
+        platform_name=spec.name,
+        brief=format_brief(brief),
         canonical_draft=canonical_draft,
-        length=spec["length"],
-        rules=rules_text,
-        extra_instructions=extra_instructions,
+        length=spec.length_label,
+        voice_block=_voice_block(voice_target),
+        format_brief=spec.brief,
+        rules=format_specs.describe_rules(spec),
+        extra_instructions=(extra_instructions + NL) if extra_instructions else "",
     )
 
     content, tokens = await complete(
         SYSTEM,
         user_prompt,
-        temperature=0.7,
-        max_tokens=4000 if target_platform in ["blog_post", "linkedin_article", "youtube_script"] else 2000,
+        temperature=0.65,
+        max_tokens=spec.max_tokens,
     )
+    content = (content or "").strip()
+    total_tokens = tokens
+
+    # ── Check the result against the format, repair once ──────────────────────
+    issues = format_specs.check(target_platform, content, source=canonical_draft)
+    repaired = False
+    # Two tries at most. A character limit is a fact, not a preference, and one
+    # repair used to fix three over-long tweets and leave a fourth.
+    for attempt in range(2):
+        if not issues:
+            break
+        log.info("Platform %s needs repair (try %d): %s", target_platform, attempt + 1, "; ".join(issues))
+        try:
+            fixed, fix_tokens = await complete(
+                SYSTEM,
+                REPAIR_TEMPLATE.format(
+                    platform_name=spec.name,
+                    problems=NL.join(f"  - {i}" for i in issues),
+                    content=content,
+                    rules="; ".join(spec.rules),
+                ),
+                temperature=0.3,
+                max_tokens=spec.max_tokens,
+            )
+            total_tokens += fix_tokens
+            fixed = (fixed or "").strip()
+            remaining = format_specs.check(target_platform, fixed, source=canonical_draft)
+            # Keep the repair only if it actually helped.
+            if fixed and format_specs.rank(target_platform, fixed, canonical_draft) < format_specs.rank(
+                target_platform, content, canonical_draft
+            ):
+                content, issues, repaired = fixed, remaining, True
+            else:
+                break
+        except Exception as e:
+            log.warning("Platform repair failed for %s (non-fatal): %s", target_platform, e)
+            break
+
+    content = format_specs.enforce_hard_limits(target_platform, content)
+    issues = format_specs.check(target_platform, content, source=canonical_draft)
 
     return {
         "content":    content,
-        "tokensUsed": tokens,
+        "tokensUsed": total_tokens,
         "agent":      "platform_optimizer",
         "platform":   target_platform,
+        "formatIssues": issues,
+        "repaired":   repaired,
     }

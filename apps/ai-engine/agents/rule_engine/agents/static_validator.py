@@ -16,6 +16,7 @@ from ..rules.rule_models import (
     RuleSeverity, RuleCategory, Rule, RuleType,
 )
 from services.llm import complete
+from services import format_specs
 
 log = logging.getLogger("ai-engine.rule_engine.validator")
 
@@ -49,25 +50,53 @@ BATCH_SIZE = 7
 STATIC_WEIGHT  = 0.70
 DYNAMIC_WEIGHT = 0.30
 
-VALIDATOR_SYSTEM = """You are a professional content quality auditor.
-Your speciality is detecting FALSE NEGATIVES — the #1 AI writing tell.
+VALIDATOR_SYSTEM = """You are a meticulous but fair content auditor.
 
-A false negative is ANY construction that says what something is NOT
-before saying what it IS:
-  "It's not just X, it's Y"
-  "Not only does it X, but it also Y"
-  "More than just X"
-  "Not merely X"
+For each rule you are given:
+1. Read the instruction.
+2. Read the whole content with that one rule in mind.
+3. Decide whether it is VIOLATED. A rule is violated only if you can quote the exact sentence that breaks it. If you cannot quote one, the rule passed.
 
-These are ALWAYS violations — zero exceptions.
+Judge the piece as the format it is. Hashtag blocks, tweet separators (---), headings, bullet lists, SUBJECT lines, numbered tweets and [stage directions] are intended conventions of their formats and are never violations. A short piece cannot be faulted for sentence variety or repetition it has no room to show.
 
-For each rule provided:
-1. Read the instruction carefully
-2. Scan the ENTIRE content
-3. Determine PASSED or VIOLATED
-4. If VIOLATED: quote the exact sentence
+Do not be harsh for the sake of it. Style rules are a matter of degree: flag a clear breach, not a matter of taste.
 
 Return ONLY valid JSON. No markdown, no explanation."""
+
+# Style rules that only mean something once there is enough text for the
+# pattern to appear. A 50-word WhatsApp status was being faulted for sentence
+# variety and phrase repetition, and the rewrite then padded it to cure them.
+LENGTH_GATED_RULES = {
+    "SR007": 120,   # sentence length variety
+    "SR008": 100,   # tense consistency
+    "SR009": 120,   # terminology consistency
+    "SR010": 120,   # phrase repetition
+    "SR011": 100,   # filler
+    "SR012": 90,    # logical progression
+}
+
+# Dynamic rules are written by a model for one request. They sharpen the
+# check, but a model-written rule must not be able to fail a piece on its own
+# the way a grounding rule can.
+DYNAMIC_MAX_SEVERITY = RuleSeverity.HIGH
+
+# A character limit or a hashtag cap is a fact about the channel. Like a pile of
+# tells, it fails the piece so the rewrite runs, instead of costing a few points.
+FORMAT_FAIL_CAP = 64.0
+_HARD_FORMAT_WORDS = ("characters", "hashtags", "tweets", "placeholder")
+
+FORMAT_RULE_ID = "FMT001"
+FORMAT_RULE = Rule(
+    id=FORMAT_RULE_ID,
+    type=RuleType.STATIC,
+    category=RuleCategory.WRITING_STYLE,
+    severity=RuleSeverity.HIGH,
+    name="Format Compliance",
+    description="The piece has to be the format it was written for.",
+    instruction="Decided by code: length, character limits, hashtags, thread shape, placeholders.",
+    weight=0.06,
+    deterministic=True,
+)
 
 
 class StaticValidatorAgent:
@@ -87,6 +116,8 @@ class StaticValidatorAgent:
             if r.category != RuleCategory.FALSE_NEGATIVE
             and not r.deterministic
         ]
+        self._platform: str | None = None
+        self._verified_material = ""
 
     async def validate(
         self,
@@ -94,9 +125,12 @@ class StaticValidatorAgent:
         iteration:     int               = 1,
         dynamic_rules: list[Rule] | None = None,
         verified_material: str           = "",
+        platform:      str | None        = None,
     ) -> ValidationResult:
 
         dynamic_rules = dynamic_rules or []
+        self._platform = platform
+        word_total = format_specs.word_count(content)
         start         = time.time()
         # What the brand has told us about itself. Without it a grounding rule
         # cannot tell a supported "we" claim from an invented one.
@@ -134,20 +168,37 @@ class StaticValidatorAgent:
         static_passed_rules.extend(tell_passed)
 
         # ── Static: Other rules ───────────────────────────────────────────────
-        for batch in self._make_batches(self.other_static, BATCH_SIZE):
+        # Rules that need room to show a pattern are not asked of a short piece.
+        active_other = [
+            r for r in self.other_static
+            if word_total >= LENGTH_GATED_RULES.get(r.id, 0)
+        ]
+        skipped = {r.id for r in self.other_static} - {r.id for r in active_other}
+        for batch in self._make_batches(active_other, BATCH_SIZE):
             v, p = await self._validate_batch(content=content, rules=batch)
             static_violations.extend(v)
             static_passed_rules.extend(p)
 
+        # ── Static: Format compliance (code, no call) ────────────────────────
+        format_violations = self._detect_format_issues(content, platform)
+        static_violations.extend(format_violations)
+        if platform and not format_violations:
+            static_passed_rules.append(FORMAT_RULE_ID)
+
+        scored_static = [r for r in self.static_rules if r.id not in skipped]
+        if platform:
+            scored_static.append(FORMAT_RULE)
         static_score = self._calculate_score(
             violations=static_violations,
-            all_rules=self.static_rules,
+            all_rules=scored_static,
         )
 
         # ── Dynamic Rules ─────────────────────────────────────────────────────
         dynamic_violations:   list[RuleViolation] = []
         dynamic_passed_rules: list[str]           = []
         dynamic_score = 100.0
+
+        dynamic_rules = [self._cap_severity(r) for r in dynamic_rules]
 
         if dynamic_rules:
             for batch in self._make_batches(dynamic_rules, BATCH_SIZE):
@@ -225,6 +276,14 @@ class StaticValidatorAgent:
                 other_critical_failures,
             )
 
+        if any(
+            v.rule_id == FORMAT_RULE_ID
+            and any(w in v.description for w in _HARD_FORMAT_WORDS)
+            for v in static_violations
+        ):
+            combined_score = min(combined_score, FORMAT_FAIL_CAP)
+            log.warning("[Validator] Hard format violation -> score capped at %s%%", FORMAT_FAIL_CAP)
+
         # Tells deduct through the ordinary weight path above. The cap is for
         # the case that deduction handles badly: a piece riddled with them
         # where no single rule is critical, so nothing would otherwise trigger
@@ -258,7 +317,7 @@ class StaticValidatorAgent:
         # ── Category Breakdown ────────────────────────────────────────────────
         category_breakdown = self._build_category_breakdown(
             all_violations=all_violations,
-            all_rules=self.static_rules + dynamic_rules,
+            all_rules=scored_static + dynamic_rules,
         )
 
         elapsed = round((time.time() - start) * 1000, 1)
@@ -327,9 +386,11 @@ class StaticValidatorAgent:
                 '"""\n' + material + '\n"""\n'
             )
 
+        format_note = self._format_note()
+
         prompt = f"""{priority_block}
 Evaluate this content against the rules below.
-{material_block}
+{format_note}{material_block}
 ## Rules:
 {rules_json}
 
@@ -339,27 +400,27 @@ Evaluate this content against the rules below.
 \"\"\"
 
 ## Required Response (ONLY this JSON):
+List ONLY the rules that are violated. A rule you do not list has passed.
 {{
-  "evaluations": [
+  "violations": [
     {{
       "rule_id":               "SR000",
-      "status":                "passed" | "violated",
-      "violation_description": "What exactly was violated (null if passed)",
-      "location":              "Quote the exact sentence (null if passed)",
-      "suggestion":            "How to fix it (null if passed)"
+      "violation_description": "What exactly was violated, in one sentence",
+      "location":              "The exact sentence, quoted",
+      "suggestion":            "How to fix it, in one sentence"
     }}
   ]
 }}
 
-- Evaluate EVERY rule — one entry per rule
-- Return ONLY valid JSON"""
+If nothing is violated, return {{"violations": []}}.
+Return ONLY valid JSON"""
 
         try:
             response, _ = await complete(
                 system=VALIDATOR_SYSTEM,
                 user=prompt,
                 temperature=0.1,
-                max_tokens=2000,
+                max_tokens=3000,
             )
             return self._parse_response(response, rules)
 
@@ -371,6 +432,56 @@ Evaluate this content against the rules below.
             self._unverified.update(r.id for r in rules)
             return [], []
 
+    @staticmethod
+    def _load_json(response: str) -> dict:
+        """Parse the model's JSON, recovering what it finished if it was cut off."""
+        clean = (response or "").strip()
+        if clean.startswith("```"):
+            parts = clean.split("```")
+            clean = parts[1] if len(parts) > 1 else clean
+            if clean.startswith("json"):
+                clean = clean[4:]
+        clean = clean.strip()
+        try:
+            return json.loads(clean)
+        except json.JSONDecodeError:
+            pass
+
+        # A long answer can be cut mid-string. Keep every violation object that
+        # closed properly; a half-written one is dropped, never guessed at.
+        start = clean.find("[")
+        if start == -1:
+            raise json.JSONDecodeError("no JSON array", clean, 0)
+        items: list[dict] = []
+        depth, in_str, esc, obj_start = 0, False, False, None
+        for i in range(start, len(clean)):
+            ch = clean[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                if depth == 0:
+                    obj_start = i
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0 and obj_start is not None:
+                    try:
+                        items.append(json.loads(clean[obj_start:i + 1]))
+                    except json.JSONDecodeError:
+                        pass
+                    obj_start = None
+        if not items:
+            raise json.JSONDecodeError("nothing recoverable", clean, 0)
+        return {"violations": items, "_truncated": True}
+
     def _parse_response(
         self,
         response: str,
@@ -381,45 +492,99 @@ Evaluate this content against the rules below.
         passed_rules: list[str]           = []
         rule_map = {r.id: r for r in rules}
 
+        def build(rule: Rule, item: dict) -> RuleViolation:
+            return RuleViolation(
+                rule_id=rule.id,
+                rule_name=rule.name,
+                severity=rule.severity,
+                category=rule.category,
+                description=item.get("violation_description") or "Rule violated",
+                location=item.get("location"),
+                suggestion=item.get("suggestion") or "Rewrite this section",
+            )
+
         try:
-            clean = response.strip()
-            if clean.startswith("```"):
-                parts = clean.split("```")
-                clean = parts[1] if len(parts) > 1 else clean
-                if clean.startswith("json"):
-                    clean = clean[4:]
-            clean = clean.strip()
+            data = self._load_json(response)
 
-            data = json.loads(clean)
+            if "evaluations" in data:
+                # Older shape: one verdict per rule.
+                for item in data.get("evaluations", []):
+                    rule = rule_map.get(item.get("rule_id"))
+                    if not rule:
+                        continue
+                    if item.get("status", "passed") == "violated":
+                        violations.append(build(rule, item))
+                    else:
+                        passed_rules.append(rule.id)
+            else:
+                flagged: dict[str, dict] = {}
+                for item in data.get("violations", []):
+                    if isinstance(item, dict) and item.get("rule_id") in rule_map:
+                        # A violation needs a quote. Without one the model is
+                        # reporting a feeling, not a sentence.
+                        if (item.get("location") or "").strip():
+                            flagged.setdefault(item["rule_id"], item)
+                for rid, item in flagged.items():
+                    violations.append(build(rule_map[rid], item))
 
-            for item in data.get("evaluations", []):
-                rule_id = item.get("rule_id")
-                status  = item.get("status", "passed")
-                rule    = rule_map.get(rule_id)
+                if data.get("_truncated"):
+                    # The tail of the answer is lost, so rules not yet listed
+                    # have not been shown to pass.
+                    log.warning(
+                        "[Validator] response was cut off; keeping %d finished item(s)",
+                        len(flagged),
+                    )
+                    self._unverified.update(r.id for r in rules if r.id not in flagged)
+                    return violations, []
 
-                if not rule:
-                    continue
+                passed_rules = [r.id for r in rules if r.id not in flagged]
 
-                if status == "violated":
-                    violations.append(RuleViolation(
-                        rule_id=rule_id,
-                        rule_name=rule.name,
-                        severity=rule.severity,
-                        category=rule.category,
-                        description=item.get("violation_description") or "Rule violated",
-                        location=item.get("location"),
-                        suggestion=item.get("suggestion") or "Rewrite this section",
-                    ))
-                else:
-                    passed_rules.append(rule_id)
-
-        except (json.JSONDecodeError, KeyError) as e:
+        except (json.JSONDecodeError, KeyError, AttributeError) as e:
             # Same fail-open problem: a malformed response is not a pass.
             log.error("[Validator] Parse error: %s", e)
             self._unverified.update(r.id for r in rules)
             violations, passed_rules = [], []
 
         return violations, passed_rules
+
+    # ── Format, severity and context helpers ─────────────────────────────────
+
+    def _format_note(self) -> str:
+        if not self._platform:
+            return ""
+        spec = format_specs.get_spec(self._platform)
+        return (
+            "\n## Format\nThis piece is a " + spec.name + " (" + spec.length_label + "). "
+            "Its conventions are intended; judge it as that format, not as an essay.\n"
+        )
+
+    @staticmethod
+    def _cap_severity(rule: Rule) -> Rule:
+        if rule.severity == RuleSeverity.CRITICAL:
+            return rule.model_copy(update={"severity": DYNAMIC_MAX_SEVERITY})
+        return rule
+
+    def _detect_format_issues(self, content: str, platform: str | None) -> list[RuleViolation]:
+        """Length, characters, hashtags, thread shape, placeholders: no model needed."""
+        if not platform:
+            return []
+        try:
+            issues = format_specs.check(platform, content)
+        except Exception as e:  # pragma: no cover - never block a run on this
+            log.warning("[Validator] format check unavailable: %s", e)
+            return []
+        return [
+            RuleViolation(
+                rule_id=FORMAT_RULE_ID,
+                rule_name=FORMAT_RULE.name,
+                severity=FORMAT_RULE.severity,
+                category=FORMAT_RULE.category,
+                description=f"Format: {issue}",
+                location=None,
+                suggestion=f"Fix the format problem: {issue}",
+            )
+            for issue in issues
+        ][:4]
 
     def _detect_false_negatives(self, content: str) -> list[RuleViolation]:
         """Regex pass for contrast negations — runs whether or not an LLM does."""

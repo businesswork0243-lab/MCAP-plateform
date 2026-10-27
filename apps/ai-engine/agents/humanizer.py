@@ -29,59 +29,28 @@ def _get_rule_engine():
 
 # ── System Prompt ─────────────────────────────────────────────────────────────
 
-SYSTEM = """You are an expert human editor who understands when content 
-needs work and when it doesn't.
+SYSTEM = """You are a line editor. You receive a draft and make it read like something a skilled person wrote on purpose. You edit; you do not rewrite from scratch.
 
-YOUR JOB: Analyze content honestly, then make ONLY the changes that 
-genuinely improve it. Do not change things that are already good.
+WHAT YOU FIX, IN THIS ORDER
+1. Every sentence listed under WRITING PATTERNS FOUND, and every banned phrase: rewrite it so it states its point directly.
+2. Vagueness. A sentence that gestures at an idea ("this changes everything", "the implications are huge") becomes the specific thing it gestured at, using only what the draft already says. If the draft holds nothing specific there, cut the sentence.
+3. Repetition. Two sentences or paragraphs making the same point become one.
+4. Rhythm. Break up runs of same-length sentences. Join runs of very short ones that belong together. A short sentence is for emphasis and should not come several times in a row.
+5. Openings and endings. An opening that announces itself, or an ending that repeats the headline, gives way to the claim itself.
+6. Passive voice and abstract nouns that hide who does what, when the draft says who.
 
-═══════════════════════════════════════════════════
-WHAT TO FIX (only if actually present):
-═══════════════════════════════════════════════════
+WHAT YOU LEAVE ALONE
+- Facts, figures, names, quotes, claims, and the order of the argument.
+- Format: headings, bullets, hashtag blocks, tweet separators (---), SUBJECT lines, [stage directions], numbering, placeholders.
+- Sentences that already work. Change what is flagged or weak and nothing else. If the whole draft is good, return it almost unchanged.
+- Length. Stay within about 10% of the original, except where you are cutting repetition.
 
-1. FALSE NEGATIVES → always fix these (non-negotiable):
-   ❌ "It's not just X, it's Y"  → ✅ State Y directly
-   ❌ "Not only X but also Y"    → ✅ "X and Y"  
-   ❌ "More than just X"         → ✅ What it actually is
+HARD LIMITS
+- Add nothing: no new fact, example, name, source, statistic or experience, and no "according to ...".
+- Never delete a claim to avoid fixing its wording. Fix the wording.
+- Do not build contrasts ("not X but Y", "more than just X"). Say what the thing is.
 
-2. AI CLICHÉS → replace only if present:
-   Opening: "In today's world", "In an era of", "At its core"
-   Transitions: "Furthermore", "Moreover", "That being said"
-   Buzzwords: "Leverage", "Utilize", "Robust", "Seamless"
-   Tells: "Delve into", "Deep dive", "Paradigm shift"
-
-3. UNNATURAL RHYTHM → fix only if sentences are all same length:
-   Mix short and long sentences where rhythm feels robotic
-
-4. PASSIVE VOICE → convert only where it weakens the message
-
-5. GENERIC ADJECTIVES → replace only where they add no value
-
-═══════════════════════════════════════════════════
-WHAT NOT TO CHANGE:
-═══════════════════════════════════════════════════
-
-✓ Content that already sounds natural — leave it alone
-✓ Specific facts, statistics, names, data — never touch
-✓ Strong sentences that work well — don't rewrite them
-✓ The overall structure and flow — preserve it
-✓ The author's unique voice — enhance, don't erase
-
-═══════════════════════════════════════════════════
-HONEST ASSESSMENT RULE:
-═══════════════════════════════════════════════════
-
-If the content is already well-written and human-sounding:
-→ Make only the specific fixes that are needed
-→ Do not rewrite for the sake of rewriting
-→ It is okay if output is 90% similar to input IF input was already good
-
-If the content has many AI patterns:
-→ Rewrite substantially
-→ Every AI phrase must go
-→ Voice must feel authentically human
-
-OUTPUT: Only the improved content. No labels, no commentary."""
+OUTPUT: only the edited content. No labels, no commentary."""
 
 
 INTENSITY_CONFIG = {
@@ -94,7 +63,7 @@ INTENSITY_CONFIG = {
         "temperature": 0.62,
     },
     "aggressive": {
-        "instruction": "Maximum — rewrite substantially for authentic human voice. Fragment sentences occasionally.",
+        "instruction": "Maximum — rewrite flagged and weak passages freely for a natural voice, still keeping every fact and the format.",
         "temperature": 0.70,
     },
 }
@@ -185,6 +154,7 @@ def _build_user_prompt(
     brand_phrases:  list | None,
     pre_issues:     dict,
     brand_document: str = "",
+    platform:       str | None = None,
 ) -> str:
 
     config = INTENSITY_CONFIG.get(intensity, INTENSITY_CONFIG["medium"])
@@ -351,6 +321,18 @@ def _build_user_prompt(
     except Exception as e:  # pragma: no cover - never block a run on this
         log.warning("Voice measurement unavailable (non-fatal): %s", e)
 
+    format_block = ""
+    if platform:
+        try:
+            from services import format_specs
+            spec = format_specs.get_spec(platform)
+            format_block = (
+                f"\n━━━ FORMAT (keep every rule) ━━━\n"
+                f"{spec.name}, {spec.length_label}\n{format_specs.describe_rules(spec)}\n"
+            )
+        except Exception as e:  # pragma: no cover - never block a run on this
+            log.warning("Format block unavailable (non-fatal): %s", e)
+
     return f"""{intensity_block}
 LANGUAGE: {lang_note}
 {tonality_block}
@@ -364,7 +346,7 @@ LANGUAGE: {lang_note}
 
 ━━━ BANNED PHRASES (fix if present) ━━━
 {banned_block}
-{tells_block}
+{tells_block}{format_block}
 ━━━ CONTENT ━━━
 {content}
 
@@ -437,12 +419,13 @@ async def run(
                 or (brand_data or {}).get("doc_context")
                 or ""
             ),
+            platform=(extra_context or {}).get("platform"),
         )
 
         humanized, tokens = await complete(
             SYSTEM,
             prompt_text,
-            temperature=config["temperature"],
+            temperature=float(config["temperature"]),
             max_tokens=max_tok,
         )
 
@@ -473,6 +456,16 @@ async def run(
         humanized      = cleanup_result.get("content", humanized)
     except Exception as e:
         log.warning("Cleanup failed (non-fatal): %s", e)
+
+    # The edit may have added words back to a piece that was inside a hard limit.
+    # Settling it here means the rule engine is not sent round the loop for a
+    # character count a model cannot do.
+    platform_name = (extra_context or {}).get("platform")
+    try:
+        from services import format_specs
+        humanized = format_specs.enforce_hard_limits(platform_name, humanized)
+    except Exception as e:  # pragma: no cover - never block a run on this
+        log.warning("Hard-limit enforcement skipped (non-fatal): %s", e)
 
     # ── Rule Engine ───────────────────────────────────────────────────────────
     rule_engine_meta: dict = {"enabled": False}
@@ -514,6 +507,12 @@ async def run(
     else:
         log.info("Rule Engine skipped")
         rule_engine_meta = {"enabled": False, "reason": "skipped"}
+
+    try:
+        from services import format_specs
+        humanized = format_specs.enforce_hard_limits(platform_name, humanized)
+    except Exception:  # pragma: no cover
+        pass
 
     # Final metrics
     try:

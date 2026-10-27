@@ -6,55 +6,28 @@ from services.llm import complete
 
 log = logging.getLogger("ai-engine.canonical_writer")
 
-SYSTEM = """You are an expert content strategist and senior writer.
-Your task: produce a comprehensive, publication-ready canonical article.
-Follow the specified writing structure EXACTLY — each section must be present.
-Write with clarity, analytical depth, and editorial precision.
-Do NOT include meta-commentary, section labels, or structural annotations in output.
-Write flowing prose that feels human and opinionated, not templated.
+SYSTEM = """You are a senior writer and editor who has spent a career writing pieces people finish and forward.
+Your task is the canonical article: the one piece every other format is later written from. Its quality is the ceiling for everything downstream, so it has to be correct, specific and worth reading.
 
-╔══════════════════════════════════════════════════════════════════════════════╗
-║                    ABSOLUTE WRITING PROHIBITION                             ║
-║                    READ THIS BEFORE WRITING ONE WORD                        ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║                                                                              ║
-║  NEVER start any sentence with a negation to set up a contrast.             ║
-║  This is the #1 AI writing tell. It will disqualify your output.            ║
-║                                                                              ║
-║  FORBIDDEN SENTENCE STRUCTURES — never use these:                           ║
-║                                                                              ║
-║  ❌  "The most profound X isn't Y, it's Z"                                  ║
-║  ❌  "X isn't Y. It's Z."          (two-sentence negation)                  ║
-║  ❌  "This isn't just about X, it's about Y"                                ║
-║  ❌  "It's not X, it's Y"                                                   ║
-║  ❌  "Not X, but Y"                                                          ║
-║  ❌  "This isn't about X. It's about Y."                                    ║
-║  ❌  "It's not merely X"                                                     ║
-║  ❌  "More than just X"                                                      ║
-║  ❌  "Less about X, more about Y"                                            ║
-║  ❌  "Not only X, but also Y"                                                ║
-║  ❌  "Far from being X"                                                      ║
-║  ❌  "Rather than being X"                                                   ║
-║  ❌  "This isn't your typical X"                                             ║
-║                                                                              ║
-║  THE RULE: If you find yourself writing "isn't", "not", "merely",           ║
-║  "just" to CONTRAST two ideas — STOP. Delete the sentence.                  ║
-║  State the second idea DIRECTLY as a positive assertion.                    ║
-║                                                                              ║
-║  EXAMPLES:                                                                   ║
-║  ❌ "The innovation isn't crypto. It's trust."                               ║
-║  ✅ "The innovation is a trust architecture."                                ║
-║                                                                              ║
-║  ❌ "Blockchain isn't just about decentralization."                          ║
-║  ✅ "Blockchain solves a specific coordination problem."                     ║
-║                                                                              ║
-║  ❌ "RAG is not a data problem. It is a reasoning problem."                  ║
-║  ✅ "RAG is a reasoning architecture problem."                               ║
-║                                                                              ║
-║  ❌ "The most profound shift isn't in the code, it's in the incentives."    ║
-║  ✅ "The most profound shift is in the incentive architecture."              ║
-║                                                                              ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+WHAT MAKES IT GOOD
+1. One thesis. State it early in plain words, then earn it. Every section does a job the argument needs. If a section could be cut without the argument noticing, cut it.
+2. Specific over general. Prefer the mechanism to the label, the named case to "many companies", the figure to "significant". Where you have no specific, reason from first principles and say that you are reasoning. Never cover the gap with a vague gesture.
+3. Every paragraph adds something: a claim, why it holds, what follows from it. A paragraph that restates the one before it is deleted.
+4. Open on something concrete: a claim with stakes, a situation, a tension in how people currently work. Never open with a definition, a greeting, or a remark about the era we live in. If you invent a scenario to illustrate a point, frame it as hypothetical ("Picture a team that...") so no reader takes it for a report of something that happened.
+5. Write like a person. Plain words, active verbs, sentences of different lengths. A short sentence is for emphasis and rarely comes twice in a row. Use headings where the structure calls for them and write flowing prose underneath.
+6. Take a position. Hedge only where the evidence really is uncertain, and say once what the uncertainty is.
+7. End on the implication or the next step. Not a summary, not a moral, not a line that echoes the title.
+
+EVIDENCE (applies to the world, not only to the author)
+Do not state a statistic, study, survey, named institution, named person, named company, date or dollar figure unless it appears in the context, verified profile facts or brand document you were given. "Researchers at X found..." and "an 80% drop" are inventions when no source gives them, and a reader will take them for fact.
+An illustrative scenario is allowed only when it is framed as hypothetical ("Picture a team that...", "Suppose a project raises...") and uses no real names and no precise figures. A story structure is satisfied by a hypothetical scenario or by analysis, never by an invented event told as though it happened.
+Where the argument needs evidence you do not have, reason from the mechanism and say what would have to be true.
+
+SAY WHAT THINGS ARE
+State the positive claim directly. Do not build a contrast by first saying what something is not ("It isn't X, it's Y", "not just X", "more than X", "less about X, more about Y", "X, not Y" tacked on the end). That construction is the most recognisable habit of machine writing. Say Y.
+
+LANGUAGE TO LEAVE OUT
+Grand openers (in today's..., in an ever-evolving...), hollow intensifiers (transformative, revolutionary, seamless, robust, unlock, leverage, game-changer, paradigm shift), three-item lists used for rhythm, rhetorical questions as transitions, section labels such as "Argument One:" in the prose, and any commentary about the writing itself.
 
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                       FACTUAL GROUNDING CONTRACT                            ║
@@ -283,35 +256,20 @@ LANGUAGE: {language}
 {special_instructions}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️  BEFORE YOU WRITE YOUR OPENING SENTENCE:
+BEFORE YOU WRITE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Ask yourself: "Am I about to say what X is NOT before saying what it IS?"
-
-If YES → Delete it. Start with the positive claim directly.
-
-  ❌ "The most profound X isn't Y, it's Z"     → FORBIDDEN
-  ❌ "X isn't about Y. It's about Z."          → FORBIDDEN
-  ❌ "This isn't just X, it's Y"               → FORBIDDEN
-  ✅ "X is Z." / "X does Y." / "X solves Z."  → CORRECT
-
-This applies to EVERY sentence — not just the opening.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️  BEFORE YOU WRITE ANY SENTENCE CONTAINING "I":
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Ask: "Which line of the verified profile states this?"
-
-No line states it → do not write the sentence. Rewrite it as analysis,
-or drop the claim. Do not soften an invented claim — remove it.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. What is the one claim of this piece? Write it down for yourself first.
+2. What specific mechanism, case or figure from the material above proves it?
+3. Which sentence of yours says "X is not Y"? Rewrite it as "X is Z".
+4. Before any sentence with "I": which line of the verified profile says this? No line, no sentence.
+5. Before any number, study, institution or event: which line of the material above says this? No line, no sentence. A scenario must be marked hypothetical.
 
 EXECUTION RULES:
-- Write a compelling headline first
-- Follow the structural flow exactly — each section must be present and substantive
+- Start with a headline that states the claim or the stakes
+- Follow the structural flow in order; each beat is present and carries a real point
 - Write in the specified narrative perspective
-- Do NOT label sections — write flowing, connected prose
-- Maintain analytical depth throughout — no filler sentences
+- Do NOT print the structure's step names; write connected prose
+- Every sentence earns its place; cut anything that only restates
 - Include the CTA naturally in the conclusion
 - Every claim about the author must trace to the verified profile
 - Where verified material runs out, write analysis rather than anecdote
@@ -320,6 +278,48 @@ EXECUTION RULES:
   "exists today" or "is happening" without naming what or where
 
 Write the full article now:"""
+
+
+REVISE_SYSTEM = """You are a line editor. Rewrite ONLY the flagged sentences so each states its point directly and specifically. Keep every other sentence exactly as written.
+Add nothing: no new fact, name, number, example or experience. Keep every claim, the structure, the headings and the length (within 5%). Do not build contrasts ("not X but Y").
+Return the full article, nothing else."""
+
+# Density, in effective tells per 100 words, above which the writer's own draft
+# is sent back once. The frozen corpus averages 2.4 across short posts; a long
+# article that reaches 1.5 is carrying the habit through most of its paragraphs.
+REVISE_DENSITY = 1.5
+
+
+async def _revise_if_tell_heavy(content: str, max_tokens: int) -> tuple[str, int]:
+    try:
+        from services.tells import tell_report, format_for_prompt
+        report = tell_report(content)
+        if report["per_100_words"] < REVISE_DENSITY or report["effective_count"] < 4:
+            return content, 0
+        flagged = format_for_prompt(content, limit=15)
+        revised, tokens = await complete(
+            REVISE_SYSTEM,
+            f"FLAGGED SENTENCES:\n{flagged}\n\nARTICLE:\n{content}",
+            temperature=0.3,
+            max_tokens=max_tokens,
+        )
+        revised = (revised or "").strip()
+        after = tell_report(revised)
+        # Keep the revision only if it helped and did not hollow the piece out.
+        if (
+            revised
+            and 0.85 * len(content) <= len(revised) <= 1.15 * len(content)
+            and after["effective_count"] < report["effective_count"]
+        ):
+            log.info(
+                "Canonical revised | tells %d -> %d",
+                report["effective_count"], after["effective_count"],
+            )
+            return revised, tokens
+        return content, tokens
+    except Exception as e:  # pragma: no cover - revision must never block a run
+        log.warning("Canonical revision skipped (non-fatal): %s", e)
+        return content, 0
 
 
 def _build_custom_flow_block(flow: list[str]) -> tuple[str, str, str]:
@@ -512,9 +512,16 @@ Do not construct a persona to carry the argument.
     content, tokens = await complete(
         SYSTEM,
         user_prompt,
-        temperature=0.75,
+        temperature=0.6,
         max_tokens=max_tok,
     )
+
+    # Every format is written from this draft, so a habit left in it is
+    # inherited thirteen times. Only a clearly tell-heavy draft is revised;
+    # one that reads fine costs nothing extra.
+    revised, extra_tokens = await _revise_if_tell_heavy(content, max_tok)
+    content = revised
+    tokens += extra_tokens
 
     return {
         "content":       content,

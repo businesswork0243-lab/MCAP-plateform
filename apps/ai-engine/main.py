@@ -548,6 +548,7 @@ async def _safe_qa(
             brand_profile=profile_dict,
             seo_enabled=seo_enabled,
             seo_settings=seo_settings,
+            platform=platform,
         )
     except Exception as e:
         log.error(
@@ -717,6 +718,21 @@ async def run_full_pipeline(req: FullPipelineRequest):
 
         log.info("→ [2/5] Platform Optimizer starting for %d platforms...",
                  len(req.targetPlatforms))
+
+        # One brief, read once, shared by every format. Without it each platform
+        # re-read the whole article and lifted the same sentences from it.
+        writing_brief, brief_tokens = await platform_optimizer.build_brief(canonical_draft)
+        total_tokens += brief_tokens
+
+        # The brand's measured rhythm, worked out once for every platform.
+        voice_target = ""
+        try:
+            from services.voice import measure as _measure_voice, describe as _describe_voice
+            _doc = (profile_dict or {}).get("document_context") or (profile_dict or {}).get("doc_context") or ""
+            voice_target = _describe_voice(_measure_voice(_doc))
+        except Exception as e:  # pragma: no cover - never block a run on this
+            log.warning("Voice target unavailable (non-fatal): %s", e)
+
         try:
             platform_results_raw = await asyncio.gather(*[
                 platform_optimizer.run(
@@ -728,6 +744,8 @@ async def run_full_pipeline(req: FullPipelineRequest):
                     seo_settings=pkg.platform_instructions[p]["seo_settings"],
                     cta=pkg.platform_instructions[p]["cta"],
                     must_preserve=must_preserve,
+                    brief=writing_brief,
+                    voice_target=voice_target,
                 )
                 for p in req.targetPlatforms
             ], return_exceptions=True)
@@ -784,8 +802,9 @@ async def run_full_pipeline(req: FullPipelineRequest):
                 brand_optimizer.run(
                     content=r["content"],
                     brand_profile=profile_dict,
+                    platform=req.targetPlatforms[i],
                 )
-                for r in platform_results
+                for i, r in enumerate(platform_results)
             ], return_exceptions=True)
         except Exception as e:
             log.error("Brand optimizer batch FAILED: %s\n%s", e, traceback.format_exc())
@@ -887,6 +906,16 @@ async def run_full_pipeline(req: FullPipelineRequest):
                 _rules_only(r, req.targetPlatforms[i])
                 for i, r in enumerate(brand_results)
             ])
+
+        # Later passes (brand, humanizer, rule engine) can add words back to a
+        # piece that was within a hard limit. Settle the limits last, in code.
+        from services import format_specs as _fs
+        for _i, _item in enumerate(final_contents):
+            _text = str(_item.get("content", ""))
+            _fixed = _fs.enforce_hard_limits(req.targetPlatforms[_i], _text)
+            if _fixed != _text:
+                log.info("Hard format limit enforced for %s", req.targetPlatforms[_i])
+                _item["content"] = _fixed
 
         # ── Agent 5: QA (parallel with fallback) ──────────────────────────
         qa_results: list[dict] = []

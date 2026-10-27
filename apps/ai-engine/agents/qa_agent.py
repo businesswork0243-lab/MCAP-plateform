@@ -16,6 +16,7 @@ import re
 import logging
 from collections import Counter
 from services.llm import complete
+from services import format_specs
 
 log = logging.getLogger("ai-engine.qa")
 
@@ -30,7 +31,7 @@ USER_TEMPLATE = """Perform a comprehensive editorial QA review of this content.
 CONTENT:
 {content}
 
-CONTEXT:
+{platform_block}CONTEXT:
 - Brand: {brand_name}
 - Brand Banned Phrases: {banned_phrases}
 - Key Messages to Check: {key_messages}
@@ -40,15 +41,27 @@ CONTEXT:
 {grounding_context}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCALE (applies to every dimension):
+  90-100  publishable as it stands; you could not name an edit
+  75-89   good; a light edit would improve it
+  60-74   acceptable, with weaknesses a reader would notice
+  40-59   significant problems
+  below 40  broken or unusable
+Most competent drafts land between 65 and 85. Use the whole scale. Any score below
+75 needs a matching entry in flags or suggestions that quotes the sentence at fault.
+
 SCORING DIMENSIONS (rate 0-100 each):
 
 1. readabilityScore    — sentence variety, flow, paragraph structure, accessibility
 2. brandScore         — brand voice, terminology, banned phrase compliance
-3. structureScore     — logical flow, argument coherence, section completeness
-4. platformScore      — appropriate length, formatting, audience fit
+3. structureScore     — one clear thesis, logical flow, argument coherence,
+                        every paragraph advancing the argument
+4. platformScore      — fit to THIS format (named above): its length, its
+                        conventions, and what readers of that channel expect
 5. humanizationScore  — naturalness, absence of AI clichés, authentic voice
 6. consistencyScore   — consistent tone, tense, perspective, terminology
-7. clarityScore       — precise language, no vague filler, unambiguous claims
+7. clarityScore       — precise language; concrete specifics instead of
+                        vague gestures; unambiguous claims
 8. engagementScore    — hook quality, reader retention, compelling narrative
 9. ctaScore           — CTA relevance and placement (score 50 if no CTA present)
 10. groundingScore    — factual grounding. Every first-person claim about the
@@ -71,7 +84,11 @@ FLAGS (only concrete, fixable issues):
 - formatting issues
 - fabricated_experience: a first-person claim absent from the verified profile
   (quote the exact sentence)
-- fabricated_metric: a number, benchmark or scale figure with no source
+- fabricated_metric: a number, percentage, benchmark or scale figure with no source
+  in the brand material, and any study, institution or named person "found" something
+- fabricated_event: an anecdote or case told as fact that the brand material does not contain
+  (a scenario clearly framed as hypothetical, such as "Picture a team that...", is fine)
+Start each such flag with its exact label, for example "fabricated_metric: ...".
 - fabricated_affiliation: a company, team, client or role not in the profile
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -123,11 +140,15 @@ WARNING_FLAG_PATTERNS = [
 
 # Flags that are "critical" (can fail the piece)
 CRITICAL_FLAG_PATTERNS = [
+    "unsourced statistic",
+    "vague attribution",
+    "fabricated or unsourced",
     "banned_phrase",
     "content_too_short",
     "structural_gap",
     "fabricated_experience",
     "fabricated_metric",
+    "fabricated_event",
     "fabricated_affiliation",
     "fabricated",
 ]
@@ -186,6 +207,7 @@ def _local_analysis(
     content:        str,
     banned_phrases: list[str],
     seo_keyword:    str | None = None,
+    platform:       str | None = None,
 ) -> list[str]:
     """Fast deterministic checks — no LLM needed."""
     flags = []
@@ -215,9 +237,14 @@ def _local_analysis(
     if len(long_sents) >= 2:
         flags.append(f"long_sentences: {len(long_sents)} sentences exceed 35 words")
 
-    # 4. Too short
+    # 4. Too short, measured against what this format is meant to be. A
+    # 40-word X post is complete; a 40-word article is not.
     word_count = len(words)
-    if word_count < 50:
+    floor = 50
+    if platform:
+        spec = format_specs.get_spec(platform)
+        floor = int(spec.min_words * 0.5) if spec.min_words else 8
+    if word_count < floor:
         flags.append(f"content_too_short: only {word_count} words")
 
     # 5. SEO check
@@ -276,6 +303,7 @@ async def run(
     brand_profile: dict | None = None,
     seo_enabled:  bool         = False,
     seo_settings: dict         = None,
+    platform:     str | None   = None,
 ) -> dict:
     """
     Perform QA analysis on content.
@@ -337,8 +365,27 @@ async def run(
             seo_block = f"\nSEO CHECK: Verify primary keyword \"{seo_keyword}\" appears naturally (not stuffed)."
 
     # ── LLM QA ───────────────────────────────────────────────────────────────
+    format_issues: list[str] = []
+    platform_block = ""
+    if platform:
+        spec = format_specs.get_spec(platform)
+        format_issues = format_specs.check(platform, content)
+        platform_block = (
+            f"FORMAT: this piece is a {spec.name} ({spec.length_label}). "
+            "Score platformScore against that format.\n"
+        )
+        if format_issues:
+            platform_block += (
+                "Measured format problems (already confirmed by code): "
+                + "; ".join(format_issues) + "\n"
+            )
+        platform_block += "\n"
+
+    # 4000 characters cut a 1,500-word article in half, so QA scored the first
+    # half and called it the piece.
     user_prompt = USER_TEMPLATE.format(
-        content=content[:4000],   # Truncate very long content for QA
+        platform_block=platform_block,
+        content=content[:14000],
         brand_name=brand_name,
         banned_phrases=(
             ", ".join(banned_phrases[:20]) if banned_phrases
@@ -357,23 +404,53 @@ async def run(
         SYSTEM,
         user_prompt,
         temperature=0.2,    # Low temperature for consistency
-        max_tokens=800,
+        max_tokens=1200,
     )
 
     # ── Parse response ────────────────────────────────────────────────────────
     scores = _parse_json_response(raw)
 
     if scores is None:
-        log.error("QA: Failed to parse LLM response — using defaults")
-        scores = _default_scores()
-        scores.update({
-            "flags":       ["qa_parse_failed"],
-            "suggestions": ["QA parsing failed — manual review recommended"],
-            "summary":     "QA analysis incomplete — using default scores",
-        })
+        # A truncated or malformed answer deserves one more try before QA
+        # gives up on the piece.
+        log.warning("QA: unparseable response, retrying once")
+        raw, retry_tokens = await complete(
+            SYSTEM,
+            user_prompt + chr(10) * 2 + "Return the JSON object only. Keep flags and suggestions short.",
+            temperature=0.0,
+            max_tokens=1500,
+        )
+        tokens += retry_tokens
+        scores = _parse_json_response(raw)
+
+    if scores is None:
+        # The old fallback scored every dimension 70, which is exactly the pass
+        # mark, so a QA call that failed twice approved the piece. Unscored is
+        # reported as unscored.
+        log.error("QA: Failed to parse LLM response twice - piece left unscored")
+        return {
+            "overallScore":  0,
+            "passed":        False,
+            "flags":         ["qa_unscored: the quality check could not be completed"],
+            "suggestions":   ["Run QA again before publishing"],
+            "summary":       "QA could not score this piece.",
+            "tokensUsed":    tokens,
+            "agent":         "qa",
+            "weights":       SCORE_WEIGHTS,
+            "error":         "qa_unparseable",
+        }
 
     # ── Local deterministic analysis ──────────────────────────────────────────
-    local_flags = _local_analysis(content, banned_phrases, seo_keyword)
+    local_flags = _local_analysis(content, banned_phrases, seo_keyword, platform)
+
+    # Format problems are measured, not opinions, so they are reported as such
+    # and cap the platform score: a 312-character X post cannot be a 90 on fit.
+    for issue in format_issues:
+        local_flags.append(f"format: {issue}")
+    if format_issues:
+        scores["platformScore"] = min(scores.get("platformScore", 70), 65)
+    if format_specs._PLACEHOLDER.search(content):
+        local_flags.append("needs_input: replace the bracketed placeholder before publishing")
 
     # Merge flags (dedup)
     llm_flags   = scores.get("flags", [])

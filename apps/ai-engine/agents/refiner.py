@@ -35,9 +35,10 @@ QUICK_TAG_INSTRUCTIONS = {
         "remove hedging words (maybe, perhaps, might). Cut filler."
     ),
     "add_stats": (
-        "Add relevant data points, percentages, or numbers where they "
-        "strengthen claims. Only use realistic figures — never fabricate specific numbers. "
-        "Use ranges or qualitative descriptions if exact data unavailable."
+        "Bring forward the numbers, percentages and measurements that are ALREADY in the "
+        "content or in the brand material, and put them where they strengthen the claim. "
+        "Do not introduce any figure that is not already there. If the content has no "
+        "figures, say so in one clause and sharpen the claims with concrete detail instead."
     ),
     "sharper_hook": (
         "Rewrite the opening/hook to be more provocative and attention-grabbing. "
@@ -77,8 +78,9 @@ QUICK_TAG_INSTRUCTIONS = {
         "Explain concepts in accessible terms. Assume smart but non-expert reader."
     ),
     "add_examples": (
-        "Add 1-2 concrete examples or case studies to illustrate main points. "
-        "Use realistic scenarios — don't invent specific companies or names."
+        "Add 1-2 concrete examples to illustrate the main points, built only from what the "
+        "content already says. Mark any scenario you construct as hypothetical (\"Picture a team "
+        "that...\"). Never name a real company, person or figure that is not already present."
     ),
 }
 

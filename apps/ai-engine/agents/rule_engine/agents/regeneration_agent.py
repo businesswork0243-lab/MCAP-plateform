@@ -5,6 +5,7 @@ from ..rules.rule_models import (
     ValidationResult, RuleViolation, RuleSeverity, RuleCategory,
 )
 from services.llm import complete
+from services import format_specs
 
 log = logging.getLogger("ai-engine.rule_engine.regeneration")
 
@@ -18,6 +19,12 @@ SURGICAL REWRITE RULES:
 3. Fix those specific sentences based on the instructions.
 4. COPY the rest of the text EXACTLY as it is.
 5. Return the full content. Do not truncate or summarize.
+
+KEEP THE FORMAT:
+The text is a specific publishing format. Hashtag blocks, tweet separators (---),
+numbering, headings, bullet lists, SUBJECT lines and [stage directions] stay as
+they are, and the length stays close to the original. A fix that breaks the
+format is a worse text than the one it replaced.
 
 NO NEW FACTS (ABSOLUTE):
 Fix a sentence by rephrasing or cutting it, never by adding to it. Do not
@@ -51,6 +58,7 @@ class RegenerationAgent:
         validation_result: ValidationResult,
         dynamic_context:   dict | None = None,
         iteration:         int         = 1,
+        platform:          str | None  = None,
     ) -> str:
 
         fn_violations = [
@@ -69,12 +77,19 @@ class RegenerationAgent:
         )
 
         fix_block     = self._build_fix_block(fn_violations, other_violations)
+        format_line   = ""
+        if platform:
+            spec = format_specs.get_spec(platform)
+            format_line = (
+                f"## Format\nThis is a {spec.name} ({spec.length_label}). "
+                f"Rules it must keep:\n{format_specs.describe_rules(spec)}\n\n"
+            )
         content_words = len(content.split())
         max_tok       = min(int(content_words * 1.5) + 500, 5000)
 
         prompt = f"""Apply surgical fixes to the content below.
 
-## Violations to Fix:
+{format_line}## Violations to Fix:
 {fix_block}
 
 ## Original Content:

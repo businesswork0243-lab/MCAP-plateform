@@ -106,6 +106,8 @@ IMPORTANT:
 - Do NOT duplicate static rules (grammar, false negatives, hallucinations)
 - Focus ONLY on brand-specific and audience-specific standards
 - Each rule must be uniquely checkable
+- Rules must suit the platform in the context. Do not write rules about length, headings or paragraph count unless the request itself sets them, and never ask a short format for what only a long one can show
+- Never mark a rule "critical"; use "high" for the most important
 - Return ONLY valid JSON"""
 
         try:

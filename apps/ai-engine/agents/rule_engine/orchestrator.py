@@ -89,6 +89,14 @@ class RuleEngineOrchestrator:
             log.warning("[RuleEngine] verified material unavailable: %s", e)
             verified_material = ""
 
+        platform = (extra_context or {}).get("platform") or None
+
+        # A rewrite is not guaranteed to be an improvement. The loop used to keep
+        # whatever the last round produced, so a piece that scored 80 after round
+        # two could ship as the 55 that round three made of it.
+        best_content: str | None = None
+        best_result: ValidationResult | None = None
+
         # False negative tracking
         initial_fn_count = 0
         final_fn_count   = 0
@@ -106,7 +114,14 @@ class RuleEngineOrchestrator:
                 iteration=iteration,
                 dynamic_rules=dynamic_rules.rules,
                 verified_material=verified_material,
+                platform=platform,
             )
+
+            if best_result is None or (
+                (validation_result.passed, validation_result.score)
+                > (best_result.passed, best_result.score)
+            ):
+                best_content, best_result = current, validation_result
 
             fn_count = sum(
                 1 for v in validation_result.violations
@@ -164,7 +179,22 @@ class RuleEngineOrchestrator:
                 validation_result=validation_result,
                 dynamic_context=dynamic_context,
                 iteration=iteration,
+                platform=platform,
             )
+
+        # If a later round made things worse, hand back the best version seen.
+        if (
+            best_result is not None
+            and validation_result is not None
+            and best_content is not None
+            and (best_result.passed, best_result.score)
+            > (validation_result.passed, validation_result.score)
+        ):
+            log.info(
+                "[RuleEngine] Final round scored %.1f%%, best round scored %.1f%% - returning the best",
+                validation_result.score, best_result.score,
+            )
+            current, validation_result = best_content, best_result
 
         elapsed_ms = round((time.time() - start_time) * 1000, 2)
 

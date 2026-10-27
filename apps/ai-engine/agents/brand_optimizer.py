@@ -4,11 +4,11 @@ import logging
 
 log = logging.getLogger("ai-engine.brand_optimizer")
 
-SYSTEM = """You are a brand strategist and editorial specialist.
-Your task: align content with a specific brand's voice, tone, values, and guidelines.
-Preserve all factual information and strategic meaning.
-Only modify HOW things are expressed — never WHAT is said.
-Never add unverified claims, statistics, or fabricated details."""
+SYSTEM = """You are a brand editor. You adjust how a piece sounds so that it is recognisably this brand, and you leave what it says and how it is laid out alone.
+
+Two failures to avoid. The first is adding things: no new claim, figure, name, credential or example. The second is over-editing: if a passage already sounds like the brand, leave it exactly as it is. Rewriting everything to prove you did something flattens the piece and strips out what makes the format work.
+
+The output must keep the same format as the input: headings, line breaks, bullet lists, hashtag blocks, tweet separators (---), numbering, SUBJECT lines, stage directions in [brackets], and bracketed placeholders all stay. Length stays within about 10% of the input."""
 
 # ─── Prompt Template ──────────────────────────────────────────────────────────
 
@@ -17,6 +17,7 @@ USER_TEMPLATE = """Apply the following brand guidelines to this content.
 CONTENT TO BRAND-ALIGN:
 {content}
 
+{format_block}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BRAND IDENTITY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -62,14 +63,15 @@ COMPLIANCE NOTES:
 {voice_block}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BRAND ALIGNMENT RULES:
-1. Replace ALL banned phrases with brand-appropriate alternatives
-2. Use preferred terminology consistently
-3. Adjust sentence structure to match formality/confidence levels
-4. Reinforce key messages without sounding forced
-5. Reflect brand beliefs — content should feel like it comes from a brand that
-   stands for {stands_for_summary} and opposes {stands_against_summary}
-6. Keep ALL facts, data, and statistics exactly as they are
-7. Do NOT add any information not in the original
+1. Replace every banned phrase with plain wording that fits the sentence
+2. Use preferred terms where they fit naturally; never force one in
+3. Match the formality and confidence levels in sentence structure and word choice
+4. Move sentence length and paragraph size toward the brand's measured rhythm when one is given above
+5. Weave in a key message only where the content already makes that point; never add a point
+6. The content should feel written by a brand that stands for {stands_for_summary} and opposes {stands_against_summary}, in word choice and emphasis only
+7. Keep every fact, figure and name exactly as written
+8. Do not add a sign-off, brand name, slogan or CTA that the content does not already have
+9. Keep the format exactly as described in the instructions you were given
 
 OUTPUT: Write only the brand-aligned content. No commentary, no labels.
 """
@@ -162,7 +164,7 @@ def _summarize_list(items: list, limit: int = 3) -> str:
 
 # ─── Agent Entry Point ────────────────────────────────────────────────────────
 
-async def run(content: str, brand_profile: dict | None) -> dict:
+async def run(content: str, brand_profile: dict | None, platform: str | None = None) -> dict:
     """Apply brand voice and guidelines to content."""
 
     # No brand profile — return as-is
@@ -275,6 +277,16 @@ follow the uploaded documents.
     except Exception as e:  # pragma: no cover - measurement must never block
         log.warning("Voice measurement unavailable (non-fatal): %s", e)
 
+    format_block = ""
+    if platform:
+        from services import format_specs
+        spec = format_specs.get_spec(platform)
+        format_block = (
+            f"FORMAT: this is a {spec.name} ({spec.length_label}). Rules it must keep:\n"
+            + format_specs.describe_rules(spec)
+            + "\n\n"
+        )
+
     user_prompt = USER_TEMPLATE.format(
         content=content,
         brand_name=brand_profile.get("name", "Unknown Brand"),
@@ -298,6 +310,7 @@ follow the uploaded documents.
         ),
         example_block=example_block,
         voice_block=voice_block,
+        format_block=format_block,
         tone_description=_build_tone_description(tone_settings),
         formality=formality,
         formality_label=_tone_label(formality, "Casual", "Semi-formal", "Formal"),
