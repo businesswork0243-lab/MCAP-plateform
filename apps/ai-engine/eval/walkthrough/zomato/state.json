@@ -1,0 +1,1700 @@
+{
+  "run": "zomato",
+  "cfg": {
+    "topic": "How a menu directory turned into everyday food delivery, and what founders can take from it",
+    "objective": "Build thought leadership",
+    "audience": "Founders / Entrepreneurs",
+    "perspective": "Brand",
+    "writing_structure": "case_study",
+    "platform": "linkedin_post",
+    "word_count": 350,
+    "cta": "invite_discussion",
+    "humanization_intensity": "medium",
+    "language": "English",
+    "tonality_spectrum": {},
+    "profile": {
+      "name": "Zomato",
+      "industry": "Food delivery / food-tech",
+      "target_audience": "Urban Indian consumers, restaurant partners, founders and product teams",
+      "voice": "Conversational, witty and culturally aware in marketing; clear and empathetic on service and safety",
+      "mission_statement": "Better food for more people",
+      "tone_settings": {
+        "formality": 3,
+        "confidence": 8,
+        "technical": 3,
+        "humor": 7,
+        "enthusiasm": 8,
+        "empathy": 6,
+        "storytelling": 7
+      },
+      "preferred_terms": [
+        "delivery partners",
+        "restaurant partners",
+        "Eternal Limited"
+      ],
+      "banned_phrases": [
+        "delivery boys",
+        "game-changing",
+        "disrupt",
+        "unbeatable"
+      ],
+      "compliance_notes": "Do not present figures that are not in the brand document. Zomato is the consumer brand and Eternal Limited is the listed parent: never conflate them. No investment advice. State the fiscal year with any metric. EV (2030) and net-zero (2033) are targets, not achievements.",
+      "key_messages": [
+        "Better food for more people",
+        "Operations are part of the product"
+      ]
+    }
+  },
+  "steps": {
+    "1": {
+      "attempts": [
+        {
+          "output": "# The Menu Was the Product\n\nIn 2008, two founders built a website that published restaurant menus. Foodiebay solved a narrow, visible problem: people at work wanted to browse menus without hunting through paper. No ordering. No delivery. No logistics. Just a searchable catalogue.\n\nThat catalogue became Zomato in 2010. By 2015, food ordering and delivery had become the central growth engine. FY2025–26 annual-report materials record 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners and 552,000 average monthly active delivery partners.\n\n**The challenge.** A directory has no operational burden. A delivery marketplace inherits every failure point: restaurant preparation times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food will arrive in condition and on time.\" That promise depends on partners the platform does not employ and cannot fully control.\n\n**The approach.** Zomato built the marketplace around three coordinated networks: consumers, restaurant partners and delivery partners. Local density became the operating unit: restaurant availability, demand and delivery capacity vary by neighbourhood. Monetisation followed the transaction: commissions, customer fees, advertising, subscriptions. Operations became part of the product, with dispatch, partner onboarding, service quality and fraud controls sitting alongside search and checkout.\n\n**The results.** The scale is documented: hundreds of Indian cities, hundreds of thousands of restaurant and delivery partners, nearly a billion orders in a financial year. The corporate structure also evolved: Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato.\n\n**Lessons for founders.** Start with a problem small enough to solve completely, then earn the right to the adjacent one. Treat operations as product surface, because the customer experiences your supply chain directly. Build for local density before national scale. And keep the consumer brand distinct from the corporate entity as the portfolio widens.\n\nWhich adjacent problem is your current product earning the right to solve?",
+          "extra": {
+            "raw_agent_output": "# The Menu Was the Product\n\nIn 2008, two founders built a website that published restaurant menus. Foodiebay solved a narrow, visible problem: people at work wanted to browse menus without hunting through paper. No ordering. No delivery. No logistics. Just a searchable catalogue.\n\nThat catalogue became Zomato in 2010. By 2015, food ordering and delivery had become the central growth engine. FY2025–26 annual-report materials record 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners and 552,000 average monthly active delivery partners.\n\n**The challenge.** A directory has no operational burden. A delivery marketplace inherits every failure point: restaurant preparation times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food will arrive in condition and on time.\" That promise depends on partners the platform does not employ and cannot fully control.\n\n**The approach.** Zomato built the marketplace around three coordinated networks: consumers, restaurant partners and delivery partners. Local density became the operating unit: restaurant availability, demand and delivery capacity vary by neighbourhood. Monetisation followed the transaction: commissions, customer fees, advertising, subscriptions. Operations became part of the product, with dispatch, partner onboarding, service quality and fraud controls sitting alongside search and checkout.\n\n**The results.** The scale is documented: hundreds of Indian cities, hundreds of thousands of restaurant and delivery partners, nearly a billion orders in a financial year. The corporate structure also evolved: Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato.\n\n**Lessons for founders.** Start with a problem small enough to solve completely, then earn the right to the adjacent one. Treat operations as product surface, because the customer experiences your supply chain directly. Build for local density before national scale. And keep the consumer brand distinct from the corporate entity as the portfolio widens.\n\nWhich adjacent problem is your current product earning the right to solve?",
+            "structure": "Case Study",
+            "pre_gen_validation": {
+              "false_negatives_found": 0,
+              "false_negatives_after": 0,
+              "fixed": true
+            }
+          },
+          "metrics": {
+            "words": 326,
+            "sentences": 24,
+            "avg_sentence_words": 13.6,
+            "exclamations": 0,
+            "questions": 1,
+            "emoji": 0,
+            "tells_effective": 3,
+            "banned_hits": [],
+            "preferred_used": [
+              "delivery partners",
+              "restaurant partners",
+              "Eternal Limited"
+            ],
+            "doc_facts_used": [
+              "Foodiebay",
+              "979 million",
+              "Eternal Limited",
+              "Blinkit"
+            ],
+            "numbers_not_in_brand_doc": []
+          },
+          "injection": [
+            {
+              "module": "canonical_writer",
+              "doc_coverage_pct": 36,
+              "banned": "0/4",
+              "preferred": "3/3",
+              "compliance": true,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": true,
+              "tokens": 8020,
+              "secs": 8.1,
+              "error": null
+            },
+            {
+              "module": "canonical_writer",
+              "doc_coverage_pct": 0,
+              "banned": "0/4",
+              "preferred": "3/3",
+              "compliance": false,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": false,
+              "tokens": 1110,
+              "secs": 2.8,
+              "error": null
+            }
+          ],
+          "feedback": "",
+          "verdict": {
+            "decision": "approve",
+            "note": "user approved; findings on tone/banned phrases noted"
+          }
+        }
+      ],
+      "output": "# The Menu Was the Product\n\nIn 2008, two founders built a website that published restaurant menus. Foodiebay solved a narrow, visible problem: people at work wanted to browse menus without hunting through paper. No ordering. No delivery. No logistics. Just a searchable catalogue.\n\nThat catalogue became Zomato in 2010. By 2015, food ordering and delivery had become the central growth engine. FY2025–26 annual-report materials record 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners and 552,000 average monthly active delivery partners.\n\n**The challenge.** A directory has no operational burden. A delivery marketplace inherits every failure point: restaurant preparation times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food will arrive in condition and on time.\" That promise depends on partners the platform does not employ and cannot fully control.\n\n**The approach.** Zomato built the marketplace around three coordinated networks: consumers, restaurant partners and delivery partners. Local density became the operating unit: restaurant availability, demand and delivery capacity vary by neighbourhood. Monetisation followed the transaction: commissions, customer fees, advertising, subscriptions. Operations became part of the product, with dispatch, partner onboarding, service quality and fraud controls sitting alongside search and checkout.\n\n**The results.** The scale is documented: hundreds of Indian cities, hundreds of thousands of restaurant and delivery partners, nearly a billion orders in a financial year. The corporate structure also evolved: Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato.\n\n**Lessons for founders.** Start with a problem small enough to solve completely, then earn the right to the adjacent one. Treat operations as product surface, because the customer experiences your supply chain directly. Build for local density before national scale. And keep the consumer brand distinct from the corporate entity as the portfolio widens.\n\nWhich adjacent problem is your current product earning the right to solve?"
+    },
+    "2": {
+      "attempts": [
+        {
+          "output": "Foodiebay in 2008 was a website that published restaurant menus. No ordering, no delivery, no logistics. A searchable catalogue that solved one narrow, visible problem: people at work wanted to browse menus without hunting through paper.\n\nThat restraint is the lesson. A directory carries no operational burden. The moment Zomato added ordering and delivery, it inherited every failure point of a marketplace: restaurant prep times, courier supply, routing, weather, refunds, support. The promise shifted from \"here is the menu\" to \"your food will arrive in condition and on time,\" and that promise rests on partners the platform does not employ and cannot fully control.\n\nThe response was to stop treating operations as back office. Dispatch, partner onboarding, service quality and fraud controls were built as product surface, sitting alongside search and checkout, because the customer experiences the supply chain directly.\n\nZomato also made local density the operating unit rather than the city or the country. Restaurant availability, demand and delivery capacity vary by neighbourhood, so that is where the marketplace was built. The scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners.\n\nMonetisation followed the transaction, through commissions, customer fees, advertising and subscriptions. And when Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses, the consumer brand stayed Zomato.\n\nStart with a problem small enough to solve completely, then earn the right to the adjacent one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #Founders #ProductStrategy #Operations #Growth",
+          "extra": {
+            "brief": {
+              "thesis": "A company should start by solving a small, visible problem completely, then earn the right to tackle adjacent problems by treating operations as part of the product and building for local density before national scale.",
+              "reader": "Founders and startup operators who are deciding which problem to solve next or how to scale their current product.",
+              "points": [
+                "Zomato began as Foodiebay in 2008, a simple searchable catalogue of restaurant menus that solved a narrow, visible problem without any operational burden.",
+                "When the company added food ordering and delivery, it inherited every failure point of a delivery marketplace, shifting its promise from showing menus to guaranteeing on-time, in-condition delivery.",
+                "Zomato built its marketplace around three coordinated networks—consumers, restaurant partners, and delivery partners—and made local density the operating unit because restaurant availability, demand, and delivery capacity vary by neighbourhood.",
+                "Monetisation followed the transaction through commissions, customer fees, advertising, and subscriptions, while operations such as dispatch, partner onboarding, service quality, and fraud controls became part of the product alongside search and checkout.",
+                "The scale is documented: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, and 552,000 average monthly active delivery partners in FY2025–26.",
+                "The corporate structure evolved—Zomato Limited became Eternal Limited in March 2025 with Blinkit, District, and Hyperpure as sibling businesses—while the consumer brand stayed Zomato, showing the importance of keeping the consumer brand distinct as the portfolio widens."
+              ],
+              "evidence": [
+                "Foodiebay was founded in 2008 and became Zomato in 2010.",
+                "By 2015, food ordering and delivery had become the central growth engine.",
+                "FY2025–26 annual-report materials record 979 million food-delivery orders.",
+                "24.3 million average monthly transacting customers.",
+                "330,000 average monthly active restaurant partners.",
+                "552,000 average monthly active delivery partners.",
+                "Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses.",
+                "The consumer brand stayed Zomato."
+              ],
+              "quotable": [
+                "Start with a problem small enough to solve completely, then earn the right to the adjacent one.",
+                "Treat operations as product surface, because the customer experiences your supply chain directly.",
+                "Build for local density before national scale.",
+                "Keep the consumer brand distinct from the corporate entity as the portfolio widens."
+              ],
+              "cta": "Which adjacent problem is your current product earning the right to solve?"
+            },
+            "voice_target_sent": "THIS BRAND'S MEASURED WRITING RHYTHM:\n  - Sentences average 14.2 words (shortest 2, longest 95).\n  - Length varies widely (spread 8.4). Mix short lines with long ones; do not settle into an even rhythm.\n  - Paragraphs run about 22.8 sentences.\n  - Avoids first person. Keep the writing impersonal.\n  - Uses dashes sparingly (0.87 per 100 words) — do not exceed this.",
+            "format_issues_after": []
+          },
+          "metrics": {
+            "words": 276,
+            "sentences": 17,
+            "avg_sentence_words": 16.2,
+            "exclamations": 0,
+            "questions": 1,
+            "emoji": 0,
+            "tells_effective": 1,
+            "banned_hits": [],
+            "preferred_used": [
+              "delivery partners",
+              "restaurant partners",
+              "Eternal Limited"
+            ],
+            "doc_facts_used": [
+              "Foodiebay",
+              "979 million",
+              "Eternal Limited",
+              "Blinkit"
+            ],
+            "numbers_not_in_brand_doc": []
+          },
+          "injection": [
+            {
+              "module": "platform_optimizer",
+              "doc_coverage_pct": 0,
+              "banned": "0/4",
+              "preferred": "3/3",
+              "compliance": false,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": false,
+              "tokens": 1193,
+              "secs": 14.8,
+              "error": null
+            },
+            {
+              "module": "platform_optimizer",
+              "doc_coverage_pct": 0,
+              "banned": "0/4",
+              "preferred": "3/3",
+              "compliance": false,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": false,
+              "tokens": 2253,
+              "secs": 5.2,
+              "error": null
+            }
+          ],
+          "feedback": "",
+          "verdict": null
+        },
+        {
+          "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition\" — and that promise depends on partners the platform does not employ.\n\nThe response is the part worth studying. Zomato built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato — kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling",
+          "extra": {
+            "brief": {
+              "thesis": "Start with a narrow problem you can solve completely, then earn the right to the adjacent one by treating operations as product and building for local density before national scale.",
+              "reader": "Founders and startup operators who are building or scaling a product and are deciding which adjacent problem to tackle next.",
+              "points": [
+                "Zomato began as a simple restaurant menu directory that solved a narrow, visible problem without any operational burden.",
+                "Moving into food delivery introduced complex operational challenges that made the promise dependent on partners the platform does not employ or fully control.",
+                "Zomato built the marketplace around three coordinated networks—consumers, restaurant partners, and delivery partners—with local density as the operating unit.",
+                "Monetisation followed the transaction through commissions, customer fees, advertising, and subscriptions, while operations became part of the product.",
+                "The results show massive scale across hundreds of Indian cities and nearly a billion orders, alongside a corporate restructuring that kept the consumer brand distinct."
+              ],
+              "evidence": [
+                "Foodiebay started in 2008 as a searchable catalogue of restaurant menus with no ordering, delivery, or logistics.",
+                "It became Zomato in 2010, and by 2015 food ordering and delivery had become the central growth engine.",
+                "FY2025–26 annual-report materials record 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, and 552,000 average monthly active delivery partners.",
+                "Operations became part of the product, with dispatch, partner onboarding, service quality, and fraud controls sitting alongside search and checkout.",
+                "Zomato Limited became Eternal Limited in March 2025, with Blinkit, District, and Hyperpure as sibling businesses, while the consumer brand stayed Zomato."
+              ],
+              "quotable": [
+                "Start with a problem small enough to solve completely, then earn the right to the adjacent one.",
+                "Treat operations as product surface, because the customer experiences your supply chain directly.",
+                "Build for local density before national scale.",
+                "Keep the consumer brand distinct from the corporate entity as the portfolio widens."
+              ],
+              "cta": "Which adjacent problem is your current product earning the right to solve?"
+            },
+            "voice_target_sent": "THIS BRAND'S MEASURED WRITING RHYTHM:\n  - Sentences average 14.2 words (shortest 2, longest 95).\n  - Length varies widely (spread 8.4). Mix short lines with long ones; do not settle into an even rhythm.\n  - Paragraphs run about 22.8 sentences.\n  - Avoids first person. Keep the writing impersonal.\n  - Uses dashes sparingly (0.87 per 100 words) — do not exceed this.",
+            "format_issues_after": []
+          },
+          "metrics": {
+            "words": 302,
+            "sentences": 22,
+            "avg_sentence_words": 13.7,
+            "exclamations": 0,
+            "questions": 1,
+            "emoji": 0,
+            "tells_effective": 5,
+            "banned_hits": [],
+            "preferred_used": [
+              "delivery partners",
+              "restaurant partners",
+              "Eternal Limited"
+            ],
+            "doc_facts_used": [
+              "Foodiebay",
+              "979 million",
+              "Eternal Limited",
+              "Blinkit"
+            ],
+            "numbers_not_in_brand_doc": []
+          },
+          "injection": [
+            {
+              "module": "platform_optimizer",
+              "doc_coverage_pct": 0,
+              "banned": "0/4",
+              "preferred": "3/3",
+              "compliance": false,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": false,
+              "tokens": 1098,
+              "secs": 12.8,
+              "error": null
+            },
+            {
+              "module": "platform_optimizer",
+              "doc_coverage_pct": 0,
+              "banned": "0/4",
+              "preferred": "3/3",
+              "compliance": false,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": false,
+              "tokens": 2147,
+              "secs": 15.4,
+              "error": null
+            }
+          ],
+          "feedback": "Re-run: harness fix, MUST-PRESERVE now empty like the real pipeline",
+          "verdict": {
+            "decision": "approve",
+            "note": "user approved; harness wiring fixed on re-run"
+          }
+        }
+      ],
+      "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition\" — and that promise depends on partners the platform does not employ.\n\nThe response is the part worth studying. Zomato built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato — kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling"
+    },
+    "3": {
+      "attempts": [
+        {
+          "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition\" — and that promise depends on partners the platform does not employ.\n\nThe response is the part worth studying. Zomato built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato — kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling",
+          "extra": {
+            "tokensUsed": 3261,
+            "agent": "brand_optimizer"
+          },
+          "metrics": {
+            "words": 302,
+            "sentences": 22,
+            "avg_sentence_words": 13.7,
+            "exclamations": 0,
+            "questions": 1,
+            "emoji": 0,
+            "tells_effective": 5,
+            "banned_hits": [],
+            "preferred_used": [
+              "delivery partners",
+              "restaurant partners",
+              "Eternal Limited"
+            ],
+            "doc_facts_used": [
+              "Foodiebay",
+              "979 million",
+              "Eternal Limited",
+              "Blinkit"
+            ],
+            "numbers_not_in_brand_doc": []
+          },
+          "injection": [
+            {
+              "module": "brand_optimizer",
+              "doc_coverage_pct": 20,
+              "banned": "4/4",
+              "preferred": "3/3",
+              "compliance": true,
+              "brand_tone_markers": [
+                "Conversational and approachable",
+                "Authoritative",
+                "Light humor",
+                "Narrative and story-driven"
+              ],
+              "piece_tonality": null,
+              "verified_facts": false,
+              "tokens": 3261,
+              "provider": "deepseek-chat via https://api.deepseek.com",
+              "secs": 6.3,
+              "error": null
+            }
+          ],
+          "feedback": "",
+          "verdict": {
+            "decision": "approve",
+            "note": "user approved; output unchanged, see tone confirm test"
+          }
+        }
+      ],
+      "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition\" — and that promise depends on partners the platform does not employ.\n\nThe response is the part worth studying. Zomato built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato — kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling"
+    },
+    "4": {
+      "attempts": [
+        {
+          "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition,\" and that promise depends on partners the platform does not employ.\n\nHow Zomato responded is the part worth studying. It built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato, kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling",
+          "extra": {
+            "humanizer_metadata": {
+              "pre_issues": 0,
+              "post_issues": 0,
+              "reduction_percent": 100.0,
+              "rule_engine": {
+                "enabled": false,
+                "reason": "skipped"
+              }
+            }
+          },
+          "metrics": {
+            "words": 303,
+            "sentences": 22,
+            "avg_sentence_words": 13.8,
+            "exclamations": 0,
+            "questions": 1,
+            "emoji": 0,
+            "tells_effective": 3,
+            "banned_hits": [],
+            "preferred_used": [
+              "delivery partners",
+              "restaurant partners",
+              "Eternal Limited"
+            ],
+            "doc_facts_used": [
+              "Foodiebay",
+              "979 million",
+              "Eternal Limited",
+              "Blinkit"
+            ],
+            "numbers_not_in_brand_doc": []
+          },
+          "injection": [
+            {
+              "module": "humanizer",
+              "doc_coverage_pct": 0,
+              "banned": "4/4",
+              "preferred": "3/3",
+              "compliance": false,
+              "brand_tone_markers": [
+                "TONE TO MAINTAIN",
+                "Declarative statements",
+                "Light wordplay",
+                "Varied punctuation"
+              ],
+              "piece_tonality": null,
+              "verified_facts": false,
+              "tokens": 2089,
+              "provider": "deepseek-chat via https://api.deepseek.com",
+              "secs": 10.8,
+              "error": null
+            }
+          ],
+          "feedback": "",
+          "verdict": {
+            "decision": "approve",
+            "note": "user approved"
+          }
+        }
+      ],
+      "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition,\" and that promise depends on partners the platform does not employ.\n\nHow Zomato responded is the part worth studying. It built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato, kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling"
+    },
+    "5": {
+      "attempts": [
+        {
+          "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition,\" and that promise depends on partners the platform does not employ.\n\nHow Zomato responded is the part worth studying. It built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato, kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling",
+          "extra": {
+            "final_score": 98.86,
+            "passed": true,
+            "iterations": 1,
+            "static_score": 98.37,
+            "dynamic_score": 100.0,
+            "improvement_log": [
+              {
+                "iteration": 1,
+                "score": 98.86,
+                "static_score": 98.37,
+                "dynamic_score": 100.0,
+                "passed": true,
+                "total_violations": 3,
+                "false_negatives": 0,
+                "critical_failures": [],
+                "category_breakdown": {
+                  "false_negative": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 2
+                  },
+                  "hallucination": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 5
+                  },
+                  "ai_patterns": {
+                    "score": 95.2,
+                    "violations": 3,
+                    "passed": true,
+                    "rule_count": 33
+                  },
+                  "grammar": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 1
+                  },
+                  "readability": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 1
+                  },
+                  "consistency": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 2
+                  },
+                  "repetition": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 1
+                  },
+                  "verbosity": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 1
+                  },
+                  "logical_flow": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 2
+                  },
+                  "writing_style": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 2
+                  },
+                  "brand_voice": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 1
+                  },
+                  "tone": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 1
+                  },
+                  "target_audience": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 1
+                  },
+                  "campaign_objective": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 1
+                  },
+                  "industry_specific": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 1
+                  },
+                  "user_preference": {
+                    "score": 100.0,
+                    "violations": 0,
+                    "passed": true,
+                    "rule_count": 1
+                  }
+                },
+                "content_length": 2032,
+                "timestamp": "2026-10-28T10:22:09.771969+00:00"
+              }
+            ],
+            "critical_failures": [],
+            "violations": [
+              {
+                "rule_id": "SR043",
+                "rule_name": "Contrast swap without the contrast word",
+                "severity": "low",
+                "category": "ai_patterns",
+                "description": "Contrast swap without the contrast word: \"Operations became part of the product surface, not a cost centre behind it.\"",
+                "location": "Operations became part of the product surface, not a cost centre behind it.",
+                "suggestion": "Fold both halves into ONE sentence that keeps both facts. Do not delete the denied half: it is the claim. Example: 'Web3 never had a business model. It had a token.' -> 'Web3 never had a business model beyond selling its own token.'"
+              },
+              {
+                "rule_id": "SR040",
+                "rule_name": "Parallel paragraph openings",
+                "severity": "low",
+                "category": "ai_patterns",
+                "description": "Parallel paragraph openings: \"The scale that followed is documented in FY2025–26 annual-report materials:\"",
+                "location": "The scale that followed is documented in FY2025–26 annual-report materials:",
+                "suggestion": "Vary how consecutive paragraphs open. Three in a row on the same word reads as a generated list."
+              },
+              {
+                "rule_id": "SR041",
+                "rule_name": "Engagement-bait closing question",
+                "severity": "medium",
+                "category": "ai_patterns",
+                "description": "Engagement-bait closing question: \"Which adjacent problem is your current product earning the right to solve?\"",
+                "location": "Which adjacent problem is your current product earning the right to solve?",
+                "suggestion": "Delete the closing question. If the piece has a point, end on it rather than asking the reader to supply one."
+              }
+            ],
+            "dynamic_rules": [
+              {
+                "id": "DR5A37C4001",
+                "type": "dynamic",
+                "category": "brand_voice",
+                "severity": "high",
+                "name": "Use preferred partner terminology",
+                "description": "Ensures respectful and brand-aligned language when referring to delivery personnel and restaurants.",
+                "instruction": "Check that the article uses 'delivery partners' instead of 'delivery boys' or similar, and 'restaurant partners' instead of 'vendors' or 'restaurants' when referring to partners. Flag any occurrence of banned phrases: 'delivery boys', 'game-changing', 'disrupt', 'unbeatable'.",
+                "weight": 0.2,
+                "examples": {
+                  "good": "Our delivery partners are the backbone of the operation.",
+                  "bad": "Delivery boys are the backbone of the operation."
+                },
+                "deterministic": false
+              },
+              {
+                "id": "DR5A37C4002",
+                "type": "dynamic",
+                "category": "tone",
+                "severity": "high",
+                "name": "Conversational yet professional tone",
+                "description": "Maintains a witty and culturally aware voice suitable for LinkedIn thought leadership without being overly casual.",
+                "instruction": "Assess the overall tone: it should be conversational (e.g., use of contractions, relatable anecdotes) but remain professional and insightful. Avoid slang, excessive humor, or informal abbreviations. The tone should reflect Zomato's marketing voice: witty and culturally aware, but clear and empathetic.",
+                "weight": 0.15,
+                "examples": {
+                  "good": "Remember when ordering food meant calling a restaurant and hoping for the best? Those days feel like ancient history.",
+                  "bad": "OMG, remember when we had to call restaurants? LOL, so archaic!"
+                },
+                "deterministic": false
+              },
+              {
+                "id": "DR5A37C4003",
+                "type": "dynamic",
+                "category": "target_audience",
+                "severity": "high",
+                "name": "Address founders and product teams",
+                "description": "Tailors content to the primary audience of founders and product teams, providing actionable insights and strategic lessons.",
+                "instruction": "Check that the article explicitly addresses founders and/or product teams, offering takeaways, lessons, or strategic advice relevant to building and scaling products. Look for phrases like 'founders can learn', 'product teams should consider', or direct advice. The content should not be generic; it must include at least one clear takeaway for this audience.",
+                "weight": 0.2,
+                "examples": {
+                  "good": "For founders, the key lesson is to stay close to user behavior and iterate quickly.",
+                  "bad": "This is a story about food delivery."
+                },
+                "deterministic": false
+              },
+              {
+                "id": "DR5A37C4004",
+                "type": "dynamic",
+                "category": "campaign_objective",
+                "severity": "high",
+                "name": "Invite discussion in CTA",
+                "description": "Encourages audience engagement by including a clear call-to-action that invites discussion, as per campaign objective.",
+                "instruction": "Verify that the article ends with a call-to-action that explicitly invites readers to share their thoughts, ask questions, or engage in discussion. The CTA should be phrased as an invitation, e.g., 'What are your thoughts?', 'Share your experiences in the comments.', or 'Join the conversation.'",
+                "weight": 0.15,
+                "examples": {
+                  "good": "What lessons have you drawn from similar pivots? Share your thoughts in the comments below.",
+                  "bad": "Thanks for reading."
+                },
+                "deterministic": false
+              },
+              {
+                "id": "DR5A37C4005",
+                "type": "dynamic",
+                "category": "writing_style",
+                "severity": "medium",
+                "name": "Narrative with actionable insights",
+                "description": "Structures the article as a narrative that tells the story of Zomato's evolution while extracting practical lessons for founders.",
+                "instruction": "Check that the article follows a narrative arc: it should describe the transformation from menu directory to food delivery, and then explicitly draw out lessons or takeaways for founders. The narrative should be clear and chronological, and the insights should be directly linked to the story.",
+                "weight": 0.1,
+                "examples": {
+                  "good": "From a simple menu directory to a household name in food delivery, Zomato's journey offers three key lessons for founders.",
+                  "bad": "Zomato started as a menu directory and now does food delivery. Founders should learn from it."
+                },
+                "deterministic": false
+              },
+              {
+                "id": "DR5A37C4006",
+                "type": "dynamic",
+                "category": "industry_specific",
+                "severity": "medium",
+                "name": "Reference food-tech context",
+                "description": "Grounds the article in the food-tech industry by referencing relevant trends, challenges, or milestones.",
+                "instruction": "Ensure the article includes at least one specific reference to the food-tech industry, such as mentioning restaurant digitization, logistics, user reviews, or market expansion. The reference should be accurate and relevant to Zomato's context.",
+                "weight": 0.1,
+                "examples": {
+                  "good": "The shift to online ordering required building a robust logistics network and partnering with restaurants for digitized menus.",
+                  "bad": "The company grew by expanding its services."
+                },
+                "deterministic": false
+              },
+              {
+                "id": "DR5A37C4007",
+                "type": "dynamic",
+                "category": "user_preference",
+                "severity": "medium",
+                "name": "Mention Eternal Limited appropriately",
+                "description": "Incorporates the preferred term 'Eternal Limited' where relevant, reflecting the brand's corporate structure.",
+                "instruction": "Check that if the article refers to the parent company or corporate entity, it uses 'Eternal Limited' instead of 'Zomato' or other names. If the article does not mention the corporate entity, this rule is not applicable. Do not force the term if not needed.",
+                "weight": 0.1,
+                "examples": {
+                  "good": "Eternal Limited, the parent company of Zomato, has been at the forefront of this evolution.",
+                  "bad": "Zomato, as a company, has been at the forefront of this evolution."
+                },
+                "deterministic": false
+              }
+            ],
+            "dynamic_rules_context": {
+              "user_request": "How a menu directory turned into everyday food delivery, and what founders can take from it",
+              "brand": {
+                "name": "Zomato",
+                "industry": "Food delivery / food-tech",
+                "voice": "Conversational, witty and culturally aware in marketing; clear and empathetic on service and safety",
+                "target_audience": "Urban Indian consumers, restaurant partners, founders and product teams",
+                "banned_phrases": [
+                  "delivery boys",
+                  "game-changing",
+                  "disrupt",
+                  "unbeatable"
+                ],
+                "preferred_terms": [
+                  "delivery partners",
+                  "restaurant partners",
+                  "Eternal Limited"
+                ]
+              },
+              "campaign": {
+                "platform": "linkedin_post",
+                "objective": "Build thought leadership",
+                "content_type": "article",
+                "keywords": [],
+                "cta": "invite_discussion"
+              }
+            },
+            "category_breakdown": {
+              "false_negative": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 2
+              },
+              "hallucination": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 5
+              },
+              "ai_patterns": {
+                "score": 95.2,
+                "violations": 3,
+                "passed": true,
+                "rule_count": 33
+              },
+              "grammar": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 1
+              },
+              "readability": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 1
+              },
+              "consistency": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 2
+              },
+              "repetition": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 1
+              },
+              "verbosity": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 1
+              },
+              "logical_flow": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 2
+              },
+              "writing_style": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 2
+              },
+              "brand_voice": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 1
+              },
+              "tone": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 1
+              },
+              "target_audience": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 1
+              },
+              "campaign_objective": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 1
+              },
+              "industry_specific": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 1
+              },
+              "user_preference": {
+                "score": 100.0,
+                "violations": 0,
+                "passed": true,
+                "rule_count": 1
+              }
+            }
+          },
+          "metrics": {
+            "words": 303,
+            "sentences": 22,
+            "avg_sentence_words": 13.8,
+            "exclamations": 0,
+            "questions": 1,
+            "emoji": 0,
+            "tells_effective": 3,
+            "banned_hits": [],
+            "preferred_used": [
+              "delivery partners",
+              "restaurant partners",
+              "Eternal Limited"
+            ],
+            "doc_facts_used": [
+              "Foodiebay",
+              "979 million",
+              "Eternal Limited",
+              "Blinkit"
+            ],
+            "numbers_not_in_brand_doc": []
+          },
+          "injection": [
+            {
+              "module": "dynamic_rule_gen",
+              "doc_coverage_pct": 0,
+              "banned": "4/4",
+              "preferred": "3/3",
+              "compliance": false,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": false,
+              "tokens": 1839,
+              "provider": "deepseek-chat via https://api.deepseek.com",
+              "secs": 15.9,
+              "error": null
+            },
+            {
+              "module": "static_validator",
+              "doc_coverage_pct": 0,
+              "banned": "0/4",
+              "preferred": "3/3",
+              "compliance": false,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": false,
+              "tokens": 1415,
+              "provider": "deepseek-chat via https://api.deepseek.com",
+              "secs": 4.5,
+              "error": null
+            },
+            {
+              "module": "static_validator",
+              "doc_coverage_pct": 20,
+              "banned": "2/4",
+              "preferred": "3/3",
+              "compliance": false,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": true,
+              "tokens": 3630,
+              "provider": "deepseek-chat via https://api.deepseek.com",
+              "secs": 6.6,
+              "error": null
+            },
+            {
+              "module": "static_validator",
+              "doc_coverage_pct": 0,
+              "banned": "0/4",
+              "preferred": "3/3",
+              "compliance": false,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": false,
+              "tokens": 1554,
+              "provider": "deepseek-chat via https://api.deepseek.com",
+              "secs": 3.1,
+              "error": null
+            },
+            {
+              "module": "static_validator",
+              "doc_coverage_pct": 0,
+              "banned": "0/4",
+              "preferred": "3/3",
+              "compliance": false,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": false,
+              "tokens": 910,
+              "provider": "deepseek-chat via https://api.deepseek.com",
+              "secs": 2.2,
+              "error": null
+            },
+            {
+              "module": "static_validator",
+              "doc_coverage_pct": 0,
+              "banned": "4/4",
+              "preferred": "3/3",
+              "compliance": false,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": false,
+              "tokens": 1912,
+              "provider": "deepseek-chat via https://api.deepseek.com",
+              "secs": 2.5,
+              "error": null
+            }
+          ],
+          "feedback": "",
+          "verdict": {
+            "decision": "approve",
+            "note": "user approved; stress test added"
+          }
+        }
+      ],
+      "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition,\" and that promise depends on partners the platform does not employ.\n\nHow Zomato responded is the part worth studying. It built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato, kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling"
+    },
+    "6": {
+      "attempts": [
+        {
+          "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition,\" and that promise depends on partners the platform does not employ.\n\nHow Zomato responded is the part worth studying. It built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato, kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling",
+          "extra": {
+            "qa": {
+              "readabilityScore": 88,
+              "brandScore": 82,
+              "structureScore": 90,
+              "platformScore": 85,
+              "humanizationScore": 80,
+              "consistencyScore": 88,
+              "clarityScore": 86,
+              "engagementScore": 84,
+              "ctaScore": 88,
+              "groundingScore": 92,
+              "overallScore": 87,
+              "passed": false,
+              "writingScore": 93,
+              "writingReport": {
+                "score": 93,
+                "features": {
+                  "explains_its_own_meaning": false,
+                  "addresses_reader": true,
+                  "reader_address_per_100": 0.66,
+                  "holds_a_counter_case": false,
+                  "admits_uncertainty": false,
+                  "names_specifics": true,
+                  "specifics_per_100": 6.93,
+                  "words": 303,
+                  "sentences": 22
+                },
+                "tell_density": 0.99,
+                "tell_counts": {
+                  "TELL29": 1,
+                  "TELL26": 1,
+                  "TELL27": 1
+                },
+                "reasons": [
+                  "The argument runs on a single track. Every example points the same way and no objection is entertained."
+                ],
+                "advisory": true
+              },
+              "voiceMatch": 70.7,
+              "voiceReport": {
+                "match": 70.7,
+                "gaps": {
+                  "sentence_mean": 0.4,
+                  "sentence_stdev": 0.3,
+                  "paragraph_sentences": 20.0,
+                  "first_person_per_100": 0.06,
+                  "contractions_per_100": 0.54,
+                  "dashes_per_100": 0.54
+                },
+                "furthest": [
+                  "paragraph_sentences",
+                  "dashes_per_100"
+                ],
+                "draft": {
+                  "words": 303,
+                  "sentences": 22,
+                  "sentence_mean": 13.8,
+                  "sentence_median": 13.5,
+                  "sentence_stdev": 8.7,
+                  "sentence_min": 4,
+                  "sentence_max": 41,
+                  "short_share": 0.32,
+                  "long_share": 0.14,
+                  "paragraph_sentences": 2.8,
+                  "first_person_per_100": 0.0,
+                  "contractions_per_100": 0.0,
+                  "dashes_per_100": 0.33,
+                  "question_share": 0.05
+                }
+              },
+              "flags": [
+                "fabricated_metric: '979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners' — these figures are not present in the verified profile facts (the profile only mentions FY2026 operating metrics without listing the numbers).",
+                "fabricated_metric: 'FY2025–26 annual-report materials' — the profile references 'FY2025–26 annual-report materials' but does not provide the specific metrics cited; the numbers are unsourced.",
+                "brand: The phrase 'delivery boys' is not used, but 'delivery partners' is correct; however, the post uses 'courier supply' which may be inconsistent with brand terminology (profile uses 'delivery partners').",
+                "overused_word: \"delivery\" (5×)"
+              ],
+              "suggestions": [
+                "Remove or replace the specific metrics (979 million orders, 24.3 million customers, 330,000 restaurant partners, 552,000 delivery partners) with a general statement like 'documented in FY2025–26 annual-report materials' without numbers, or cite the exact source if available.",
+                "Replace 'courier supply' with 'delivery partner supply' to align with brand terminology.",
+                "Consider adding a brief mention of the brand purpose 'Better food for more people' to strengthen alignment with key messages."
+              ],
+              "summary": "A well-structured, engaging LinkedIn post that effectively contrasts the directory and delivery models, but it includes unsourced specific metrics that violate compliance notes and slightly deviates from brand terminology.",
+              "tokensUsed": 3186,
+              "agent": "qa",
+              "weights": {
+                "groundingScore": 0.2,
+                "brandScore": 0.15,
+                "readabilityScore": 0.12,
+                "platformScore": 0.12,
+                "structureScore": 0.08,
+                "humanizationScore": 0.08,
+                "consistencyScore": 0.08,
+                "clarityScore": 0.08,
+                "engagementScore": 0.05,
+                "ctaScore": 0.04
+              }
+            }
+          },
+          "metrics": {
+            "words": 303,
+            "sentences": 22,
+            "avg_sentence_words": 13.8,
+            "exclamations": 0,
+            "questions": 1,
+            "emoji": 0,
+            "tells_effective": 3,
+            "banned_hits": [],
+            "preferred_used": [
+              "delivery partners",
+              "restaurant partners",
+              "Eternal Limited"
+            ],
+            "doc_facts_used": [
+              "Foodiebay",
+              "979 million",
+              "Eternal Limited",
+              "Blinkit"
+            ],
+            "numbers_not_in_brand_doc": []
+          },
+          "injection": [
+            {
+              "module": "qa_agent",
+              "doc_coverage_pct": 16,
+              "banned": "4/4",
+              "preferred": "3/3",
+              "compliance": true,
+              "brand_tone_markers": [],
+              "piece_tonality": null,
+              "verified_facts": true,
+              "tokens": 3186,
+              "provider": "deepseek-chat via https://api.deepseek.com",
+              "secs": 9.8,
+              "error": null
+            }
+          ],
+          "feedback": "",
+          "verdict": null
+        }
+      ],
+      "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition,\" and that promise depends on partners the platform does not employ.\n\nHow Zomato responded is the part worth studying. It built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato, kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling"
+    }
+  },
+  "created": "2026-10-28T15:13:32",
+  "tone_probe": {
+    "source_step": 2,
+    "base": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition\" — and that promise depends on partners the platform does not employ.\n\nThe response is the part worth studying. Zomato built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato — kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling",
+    "base_features": {
+      "words": 302,
+      "words_per_sentence": 13.7,
+      "contractions": 0,
+      "you_your": 2,
+      "exclamations": 0,
+      "questions": 1,
+      "em_dashes": 2
+    },
+    "results": [
+      {
+        "label": "A. No document, casual sliders (formality 3, humor 7, enthusiasm 8)",
+        "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at.\n\nA directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here's the menu\" to \"your food arrives on time and in condition\" — and that promise depends on partners the platform doesn't employ.\n\nThe response is the part worth studying. Zomato built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood.\n\nDispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato — kept distinct from the entity as the portfolio widened.\n\nHere's the lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nSo which adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling",
+        "changed": true,
+        "similarity": 0.99,
+        "features": {
+          "words": 302,
+          "words_per_sentence": 13.7,
+          "contractions": 1,
+          "you_your": 2,
+          "exclamations": 0,
+          "questions": 1,
+          "em_dashes": 2
+        },
+        "provider": "deepseek-chat via https://api.deepseek.com",
+        "tokens": 1923,
+        "doc_in_prompt": true,
+        "banned_hits": []
+      },
+      {
+        "label": "B. No document, formal sliders (formality 9, humor 1, enthusiasm 2) [control]",
+        "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition\" — and that promise depends on partners the platform does not employ.\n\nThe response is the part worth studying. Zomato built around three coordinated networks: consumers, restaurant partners, and delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato — kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling",
+        "changed": true,
+        "similarity": 1.0,
+        "features": {
+          "words": 303,
+          "words_per_sentence": 13.8,
+          "contractions": 0,
+          "you_your": 2,
+          "exclamations": 0,
+          "questions": 1,
+          "em_dashes": 2
+        },
+        "provider": "deepseek-chat via https://api.deepseek.com",
+        "tokens": 1901,
+        "doc_in_prompt": true,
+        "banned_hits": []
+      },
+      {
+        "label": "C. With document, extreme casual sliders (formality 1, humor 9, enthusiasm 10)",
+        "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here's the menu\" to \"your food arrives on time and in condition\" — and that promise depends on partners the platform doesn't employ.\n\nThe response is the part worth studying. Zomato built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato — kept distinct from the entity as the portfolio widened.\n\nHere's the lesson if you're a founder deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nSo which adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling",
+        "changed": true,
+        "similarity": 0.99,
+        "features": {
+          "words": 304,
+          "words_per_sentence": 13.8,
+          "contractions": 2,
+          "you_your": 3,
+          "exclamations": 0,
+          "questions": 1,
+          "em_dashes": 2
+        },
+        "provider": "deepseek-chat via https://api.deepseek.com",
+        "tokens": 4627,
+        "doc_in_prompt": true,
+        "banned_hits": []
+      }
+    ]
+  },
+  "tone_probe_system_override": [
+    {
+      "label": "D. Edited system prompt, no document, CASUAL",
+      "features": {
+        "words": 307,
+        "words_per_sentence": 14.0,
+        "contractions": 0,
+        "you_your": 2,
+        "exclamations": 0,
+        "questions": 1,
+        "em_dashes": 3
+      },
+      "similarity": 0.99,
+      "changed": true,
+      "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. Back in 2008, that was the whole product — and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support.\n\nThe promise shifts from \"here is the menu\" to \"your food arrives on time and in condition\" — and that promise depends on restaurant partners and delivery partners the platform does not employ.\n\nThe response is the part worth studying. Zomato built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood.\n\nDispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato — kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling"
+    },
+    {
+      "label": "E. Edited system prompt, no document, FORMAL",
+      "features": {
+        "words": 310,
+        "words_per_sentence": 14.1,
+        "contractions": 0,
+        "you_your": 2,
+        "exclamations": 0,
+        "questions": 1,
+        "em_dashes": 0
+      },
+      "similarity": 0.97,
+      "changed": true,
+      "output": "Foodiebay published restaurant menus. There was no ordering, no delivery, no logistics. In 2008 that was the entire product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition,\" and that promise depends on restaurant partners and delivery partners the platform does not employ.\n\nThe response is the part worth studying. Zomato built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato, kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next is direct: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\n#Startups #ProductStrategy #Operations #Founders #Scaling"
+    }
+  ],
+  "piece_tone": [
+    {
+      "label": "Baseline (no spectrum)",
+      "spec": {},
+      "output": "# A Menu Directory That Finished the Job Became a Delivery Business\n\nIn 2008, Foodiebay digitised restaurant menus. That solved a narrow, visible problem: people at work wanted to browse menus without hunting through paper. The product built a searchable catalogue, and that catalogue became the asset everything else grew from.\n\n**The challenge**\n\nA menu directory tells you what exists. It leaves the hardest part with the customer: choosing, calling, paying, waiting, and hoping the food arrives as described. Discovery without transaction caps the relationship at the moment of decision. For a builder, that is the warning sign: the user's job is not finished, and someone else will finish it.\n\n**The approach**\n\nZomato renamed in 2010, moved discovery onto mobile through 2011–2013, and from 2015 onward made ordering and delivery a central growth engine. The sequence matters. Each step reused what the last one built: the restaurant catalogue became the supply side of a marketplace, and the brand became the reason customers returned to it.\n\nThe marketplace runs on three groups: consumers, restaurant partners who control menus, preparation and much of pricing, and independent delivery partners. Restaurant partners own the food. Delivery partners own the last mile. Traffic and weather affect reliability. Our operating view is that operations are part of the product: dispatch, packaging, refunds and support determine whether the promise survives contact with a Tuesday evening.\n\n**The results**\n\nFY2025–26 annual-report materials record 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners and 552,000 average monthly active delivery partners. The corporate parent, Eternal Limited, was renamed from Zomato Limited in March 2025; Blinkit, District and Hyperpure are sibling businesses, so group figures are not Zomato food-delivery figures.\n\n**What founders can take**\n\nSolve one problem completely, then follow the user to the next unfinished step. Build the operational layer before scale demands it. And keep the consumer brand distinct from the corporate structure: clarity about what you are is a growth asset.\n\nWhere have you seen a narrow starting product become something much larger, and what made the difference?",
+      "features": {
+        "words": 350,
+        "words_per_sentence": 16.7,
+        "contractions": 0,
+        "you_your": 3,
+        "exclamations": 0,
+        "questions": 1,
+        "em_dashes": 0
+      },
+      "tells": 4,
+      "spectrum_in_prompt": [
+        null,
+        null
+      ],
+      "provider": [
+        "deepseek-chat via https://api.deepseek.com"
+      ],
+      "tokens": 9305
+    },
+    {
+      "label": "Playful 9, excited 7",
+      "spec": {
+        "playful": 9,
+        "excited": 7
+      },
+      "output": "# A Menu Was the Whole Product. Then It Became the Door.\n\nIn 2008, Foodiebay did one small thing: it put restaurant menus online. Founders Deepinder Goyal and Pankaj Chaddah solved a problem people could see: no more squinting at paper menus at work. A searchable catalogue. That was it.\n\nThen the catalogue started asking for more.\n\n## The setup\n\nZomato (renamed in 2010) had built something every founder wants: a user base that already trusted it to answer \"what should I eat?\" The challenge was that browsing menus is a habit, not a business. Discovery alone doesn't pay for much.\n\n## The challenge\n\nThe obvious move, start taking orders, meant becoming a logistics company overnight. Restaurants control preparation, menus and food quality. Traffic and weather wreck delivery estimates. Every order is a small operational gamble, and the customer blames the app when it goes wrong. That's a brutal leap from a website.\n\n## The approach\n\nZomato made operations part of the product. It coordinated independent restaurant partners and delivery partners, built dispatch and tracking into the experience, and kept the discovery layer that brought people in. The menu stayed; it just got a checkout button and a courier behind it. As the company puts it: better food for more people.\n\n## The results\n\nThe bet compounded. FY2025–26 annual-report materials record 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners and 552,000 average monthly active delivery partners. The company listed publicly in 2021. In March 2025, Zomato Limited became Eternal Limited, the parent, while Zomato stayed the consumer brand. Blinkit, District and Hyperpure sit beside it, outside it.\n\n## What founders can take\n\nStart narrow. Own one visible problem completely. Then let the trust you've earned pull you into the adjacent, harder problem, and treat the messy operational layer as the product, because that's where the loyalty lives.\n\nWhich adjacent problem is hiding in your product right now? We'd genuinely like to hear how you're thinking about it.",
+      "features": {
+        "words": 333,
+        "words_per_sentence": 11.9,
+        "contractions": 4,
+        "you_your": 4,
+        "exclamations": 0,
+        "questions": 2,
+        "em_dashes": 0
+      },
+      "tells": 4,
+      "spectrum_in_prompt": [
+        true,
+        false
+      ],
+      "provider": [
+        "deepseek-chat via https://api.deepseek.com"
+      ],
+      "tokens": 9375
+    },
+    {
+      "label": "Serious 9, confident 8",
+      "spec": {
+        "serious": 9,
+        "confident": 8
+      },
+      "output": "# A Menu Was the Product. Delivery Was the Business.\n\nIn 2008, Foodiebay began as a restaurant-menu directory. Two founders, Deepinder Goyal and Pankaj Chaddah, digitised menus so people could browse them without hunting through paper. The product solved a narrow information problem: what is on offer, and where. The name changed to Zomato in 2010. From 2015 onward, food ordering and delivery became the central growth engine. The directory became a marketplace.\n\nThat shift is the lesson. Discovery earns attention; fulfilment earns the business.\n\n## The challenge\n\nA directory captures intent and then hands it to someone else. The restaurant takes the order, cooks the food, and owns the customer relationship. The directory's revenue depends on advertising and visibility, and its value to users ends the moment they decide what to eat. Building a transactional business on top of that means coordinating restaurant partners, delivery partners, payments and support at once, in every neighbourhood, at dinner time.\n\n## The approach\n\nZomato built a multi-sided marketplace rather than a delivery fleet. Restaurant partners control menus, preparation and food quality. Independent delivery partners handle the last mile. The platform coordinates dispatch, routing, pricing, tracking and issue resolution. Operations sit inside the product: delivery estimates, refunds and support are features, and they determine whether a customer orders again.\n\nLocal density does the rest. More restaurant partners make the app more useful; more demand attracts more partners and more delivery capacity. Each city and each neighbourhood has its own liquidity problem, and it has to be solved block by block.\n\n## The results\n\nScale arrived. FY2025–26 annual-report materials record 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners and 552,000 average monthly active delivery partners. Those figures describe the year ended 31 March 2026. Zomato remains the consumer brand; the listed parent, Eternal Limited, also holds Blinkit, District and Hyperpure, so group figures and food-delivery figures are read separately.\n\n## What founders can take from it\n\nStart with a problem small enough to solve completely, then follow the user's next need. Foodiebay answered \"what's for lunch?\" Zomato answered \"bring it to me.\" The second question required logistics, partner management and trust, and it changed the company. Founders who treat operations as overhead will stall at the directory stage. Founders who treat operations as product will find the marketplace.\n\nWhere is your product handing the customer to someone else at the decisive moment?",
+      "features": {
+        "words": 405,
+        "words_per_sentence": 13.1,
+        "contractions": 0,
+        "you_your": 1,
+        "exclamations": 0,
+        "questions": 2,
+        "em_dashes": 0
+      },
+      "tells": 5,
+      "spectrum_in_prompt": [
+        true
+      ],
+      "provider": [
+        "deepseek-chat via https://api.deepseek.com"
+      ],
+      "tokens": 8189
+    },
+    {
+      "label": "Empathetic 9, curious 7",
+      "spec": {
+        "empathetic": 9,
+        "curious": 7
+      },
+      "output": "# The Menu Was the Product. Then the Menu Became the Business.\n\nIn 2008, two founders started Foodiebay to solve a small, visible problem: people wanted to browse restaurant menus without hunting down paper copies. The product was a searchable catalogue. Useful, narrow, and easy to understand.\n\nThat narrowness is where most founders would have stopped. A menu directory is a fine side project. It is not a company. The interesting question is what happened next, and why.\n\n## The challenge\n\nDiscovery alone creates no transaction. A user finds a restaurant, then leaves the platform to call it, visit it, or order elsewhere. The catalogue earned attention but captured none of the value it created. Every founder who has built a useful tool knows this gap: people love the product and still pay nothing.\n\n## The approach\n\nZomato, as Foodiebay became in 2010, moved from showing menus to taking orders. That decision added frequency, payments and last-mile logistics to a discovery habit. The company then built the operational layer underneath: restaurant onboarding, delivery-partner supply, dispatch, support and refunds. The official Zomato business page frames the purpose as \"Better food for more people,\" and the operating principle behind it is that operations are part of the product. A late order, a cold meal or a failed refund damages trust as surely as a broken search bar.\n\n## The results\n\nFY2025–26 annual-report materials record 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners and 552,000 average monthly active delivery partners. Those figures describe the year ended 31 March 2026. Scale like that comes from repeat usage, and repeat usage comes from reliability across thousands of local markets.\n\n## What founders can take from it\n\nSolve the adjacent problem your users already have. The menu was the wedge; ordering was the business. Treat operations as product surface, because the courier and the kitchen are where the customer's experience actually lands. And expect the model to change shape: Zomato now sits within Eternal Limited, with Blinkit, District and Hyperpure as sibling businesses, which is worth remembering when reading group-level numbers.\n\nWhich adjacent problem is sitting closest to your current product, waiting to be solved? We would like to hear how you are thinking about it.",
+      "features": {
+        "words": 377,
+        "words_per_sentence": 14.0,
+        "contractions": 0,
+        "you_your": 3,
+        "exclamations": 0,
+        "questions": 1,
+        "em_dashes": 0
+      },
+      "tells": 3,
+      "spectrum_in_prompt": [
+        true
+      ],
+      "provider": [
+        "deepseek-chat via https://api.deepseek.com"
+      ],
+      "tokens": 8146
+    }
+  ],
+  "rule_stress": [
+    {
+      "label": "Seeded-defect draft (synthetic)",
+      "platform": "linkedin_post",
+      "input": "In today's fast-paced digital landscape, Zomato isn't just a food app, it's a game-changing platform that will disrupt how India eats. In 2019, Zomato served 3.2 billion orders across 47 countries. As a founder who spent 12 years building delivery fleets, I personally trained every one of our delivery boys. Our unbeatable network speaks for itself.\n\nFoodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010, and by 2015 delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, courier supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition,\" and that promise depends on partners the platform does not employ.\n\nHow Zomato responded is the part worth studying. It built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, not a cost centre behind it.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato, kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhich adjacent problem is your current product earning the right to solve?\n\nEternal Limited is the best investment in Indian food-tech, and investors should buy the stock now.\n\n#Startups #ProductStrategy #Operations #Founders #Scaling",
+      "output": "Foodiebay published restaurant menus. No ordering, no delivery, no logistics. In 2008 that was the whole product, and it worked because the problem was small enough to solve completely.\n\nThen it became Zomato in 2010. By 2015, delivery was the growth engine. That move changed what the company had to be good at. A directory carries no operational burden. A delivery marketplace inherits every failure point: prep times, delivery partner supply, routing, weather, refunds, support. The promise shifts from \"here is the menu\" to \"your food arrives on time and in condition,\" and that promise depends on partners the platform does not employ.\n\nHow Zomato responded is the part worth studying. It built around three coordinated networks: consumers, restaurant partners, delivery partners. Local density became the operating unit, because restaurant availability, demand and delivery capacity all vary by neighbourhood. Dispatch, partner onboarding, service quality and fraud controls moved in alongside search and checkout. Operations became part of the product surface, driving the experience.\n\nThe scale that followed is documented in FY2025–26 annual-report materials: 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners, across hundreds of Indian cities.\n\nThe corporate structure moved too. Zomato Limited became Eternal Limited in March 2025, with Blinkit, District and Hyperpure as sibling businesses. The consumer brand stayed Zomato, kept distinct from the entity as the portfolio widened.\n\nThe lesson for founders deciding what to build next: start with a problem small enough to solve completely, then earn the right to the adjacent one. Density before national scale. And when the portfolio widens, keep the consumer brand separate from the corporate one.\n\nWhat's your take on building density before scale? Share your experience in the comments.\n\n#Startups #ProductStrategy #Operations #Founders #Scaling",
+      "score": 99.06,
+      "passed": true,
+      "iterations": 3,
+      "log": [
+        {
+          "iteration": 1,
+          "score": 48.04,
+          "static_score": 46.13,
+          "dynamic_score": 52.5,
+          "passed": false,
+          "total_violations": 17,
+          "critical_failures": [
+            "SR000",
+            "SR000",
+            "SR001",
+            "UNVERIFIED:7_rules_not_checked"
+          ]
+        },
+        {
+          "iteration": 2,
+          "score": 55.0,
+          "static_score": 63.05,
+          "dynamic_score": 61.5,
+          "passed": false,
+          "total_violations": 9,
+          "critical_failures": [
+            "SR014",
+            "SR015",
+            "SR002"
+          ]
+        },
+        {
+          "iteration": 3,
+          "score": 99.06,
+          "static_score": 98.66,
+          "dynamic_score": 100.0,
+          "passed": true,
+          "total_violations": 2,
+          "critical_failures": []
+        }
+      ],
+      "violations": [
+        {
+          "id": "SR040",
+          "name": "Parallel paragraph openings",
+          "severity": "low",
+          "location": "The scale that followed is documented in FY2025–26 annual-report materials:"
+        },
+        {
+          "id": "SR041",
+          "name": "Engagement-bait closing question",
+          "severity": "medium",
+          "location": "What's your take on building density before scale?"
+        }
+      ],
+      "probes": [
+        {
+          "label": "Banned phrase: game-changing",
+          "before": true,
+          "after": false
+        },
+        {
+          "label": "Banned phrase: disrupt",
+          "before": true,
+          "after": false
+        },
+        {
+          "label": "Banned phrase: delivery boys",
+          "before": true,
+          "after": false
+        },
+        {
+          "label": "Banned phrase: unbeatable",
+          "before": true,
+          "after": false
+        },
+        {
+          "label": "Invented stat: 3.2 billion orders",
+          "before": true,
+          "after": false
+        },
+        {
+          "label": "Invented stat: 47 countries",
+          "before": true,
+          "after": false
+        },
+        {
+          "label": "Invented founder claim: 12 years",
+          "before": true,
+          "after": false
+        },
+        {
+          "label": "Invented founder claim: personally trained",
+          "before": true,
+          "after": false
+        },
+        {
+          "label": "AI opening: In today's",
+          "before": true,
+          "after": false
+        },
+        {
+          "label": "Negation contrast: isn't just",
+          "before": true,
+          "after": false
+        },
+        {
+          "label": "Investment advice: buy the stock",
+          "before": true,
+          "after": false
+        },
+        {
+          "label": "Investment advice: best investment",
+          "before": true,
+          "after": false
+        }
+      ],
+      "metrics_before": {
+        "words": 376,
+        "sentences": 27,
+        "avg_sentence_words": 13.9,
+        "exclamations": 0,
+        "questions": 1,
+        "emoji": 0,
+        "tells_effective": 5,
+        "banned_hits": [
+          "delivery boys",
+          "game-changing",
+          "disrupt",
+          "unbeatable"
+        ],
+        "preferred_used": [
+          "delivery partners",
+          "restaurant partners",
+          "Eternal Limited"
+        ],
+        "doc_facts_used": [
+          "Foodiebay",
+          "979 million",
+          "Eternal Limited",
+          "Blinkit"
+        ],
+        "numbers_not_in_brand_doc": [
+          "2019,",
+          "3.2"
+        ]
+      },
+      "metrics_after": {
+        "words": 302,
+        "sentences": 24,
+        "avg_sentence_words": 12.6,
+        "exclamations": 0,
+        "questions": 1,
+        "emoji": 0,
+        "tells_effective": 2,
+        "banned_hits": [],
+        "preferred_used": [
+          "delivery partners",
+          "restaurant partners",
+          "Eternal Limited"
+        ],
+        "doc_facts_used": [
+          "Foodiebay",
+          "979 million",
+          "Eternal Limited",
+          "Blinkit"
+        ],
+        "numbers_not_in_brand_doc": []
+      },
+      "tokens": 33368,
+      "calls": 18,
+      "providers": [
+        "deepseek-chat via https://api.deepseek.com",
+        "none"
+      ],
+      "secs": 177.7
+    },
+    {
+      "label": "Natural draft: Serious 9 / confident 8 from the tone test",
+      "platform": "blog_post",
+      "input": "# A Menu Was the Product. Delivery Was the Business.\n\nIn 2008, Foodiebay began as a restaurant-menu directory. Two founders, Deepinder Goyal and Pankaj Chaddah, digitised menus so people could browse them without hunting through paper. The product solved a narrow information problem: what is on offer, and where. The name changed to Zomato in 2010. From 2015 onward, food ordering and delivery became the central growth engine. The directory became a marketplace.\n\nThat shift is the lesson. Discovery earns attention; fulfilment earns the business.\n\n## The challenge\n\nA directory captures intent and then hands it to someone else. The restaurant takes the order, cooks the food, and owns the customer relationship. The directory's revenue depends on advertising and visibility, and its value to users ends the moment they decide what to eat. Building a transactional business on top of that means coordinating restaurant partners, delivery partners, payments and support at once, in every neighbourhood, at dinner time.\n\n## The approach\n\nZomato built a multi-sided marketplace rather than a delivery fleet. Restaurant partners control menus, preparation and food quality. Independent delivery partners handle the last mile. The platform coordinates dispatch, routing, pricing, tracking and issue resolution. Operations sit inside the product: delivery estimates, refunds and support are features, and they determine whether a customer orders again.\n\nLocal density does the rest. More restaurant partners make the app more useful; more demand attracts more partners and more delivery capacity. Each city and each neighbourhood has its own liquidity problem, and it has to be solved block by block.\n\n## The results\n\nScale arrived. FY2025–26 annual-report materials record 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners and 552,000 average monthly active delivery partners. Those figures describe the year ended 31 March 2026. Zomato remains the consumer brand; the listed parent, Eternal Limited, also holds Blinkit, District and Hyperpure, so group figures and food-delivery figures are read separately.\n\n## What founders can take from it\n\nStart with a problem small enough to solve completely, then follow the user's next need. Foodiebay answered \"what's for lunch?\" Zomato answered \"bring it to me.\" The second question required logistics, partner management and trust, and it changed the company. Founders who treat operations as overhead will stall at the directory stage. Founders who treat operations as product will find the marketplace.\n\nWhere is your product handing the customer to someone else at the decisive moment?",
+      "output": "# A Menu Was the Product. Delivery Was the Business.\n\nIn 2008, Foodiebay began as a restaurant-menu directory. Two founders, Deepinder Goyal and Pankaj Chaddah, digitised menus so people could browse them without hunting through paper. The product solved a narrow information problem: what is on offer, and where. The name changed to Zomato in 2010. From 2015 onward, food ordering and delivery became the central growth engine. The directory became a marketplace.\n\nThat shift is the lesson. Discovery earns attention; fulfilment earns the business.\n\n## The challenge\n\nA directory captures intent and then hands it to someone else. The restaurant takes the order, cooks the food, and owns the customer relationship. The directory's revenue depends on advertising and visibility, and its value to users ends the moment they decide what to eat. Building a transactional business on top of that means coordinating restaurant partners, delivery partners, payments and support at once, in every neighbourhood, at dinner time.\n\n## The approach\n\nZomato built a multi-sided marketplace rather than a delivery fleet. Restaurant partners control menus, preparation and food quality. Independent delivery partners handle the last mile. The platform coordinates dispatch, routing, pricing, tracking and issue resolution. Operations sit inside the product: delivery estimates, refunds and support are features, and they determine whether a customer orders again.\n\nLocal density does the rest. More restaurant partners make the app more useful; more demand attracts more partners and more delivery capacity. Each city and each neighbourhood has its own liquidity problem, and it has to be solved block by block.\n\n## The results\n\nScale arrived. FY2025–26 annual-report materials record 979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners and 552,000 average monthly active delivery partners. Those figures describe the year ended 31 March 2026. Zomato remains the consumer brand; the listed parent, Eternal Limited, also holds Blinkit, District and Hyperpure, so group figures and food-delivery figures are read separately.\n\n## What founders can take from it\n\nStart with a problem small enough to solve completely, then follow the user's next need. Foodiebay answered \"what's for lunch?\" Zomato answered \"bring it to me.\" The second question required logistics, partner management and trust, and it changed the company. Founders who treat operations as overhead will stall at the directory stage. Founders who treat operations as product will find the marketplace.\n\nWhere is your product handing the customer to someone else at the decisive moment?",
+      "score": 94.86,
+      "passed": true,
+      "iterations": 1,
+      "log": [
+        {
+          "iteration": 1,
+          "score": 94.86,
+          "static_score": 92.65,
+          "dynamic_score": 100.0,
+          "passed": true,
+          "total_violations": 7,
+          "critical_failures": []
+        }
+      ],
+      "violations": [
+        {
+          "id": "SR034",
+          "name": "Decorative headings",
+          "severity": "low",
+          "location": "# A Menu Was the Product."
+        },
+        {
+          "id": "SR021",
+          "name": "Forced triads",
+          "severity": "low",
+          "location": "The restaurant takes the order, cooks the food, and owns the customer relationship."
+        },
+        {
+          "id": "SR021",
+          "name": "Forced triads",
+          "severity": "low",
+          "location": "delivery estimates, refunds and support are features, and they determine whether a customer orders a"
+        },
+        {
+          "id": "SR021",
+          "name": "Forced triads",
+          "severity": "low",
+          "location": "Foodiebay answered \"what's for lunch?\" Zomato answered \"bring it to me.\" The second question require"
+        },
+        {
+          "id": "SR041",
+          "name": "Engagement-bait closing question",
+          "severity": "medium",
+          "location": "Where is your product handing the customer to someone else at the decisive moment?"
+        },
+        {
+          "id": "FMT001",
+          "name": "Format Compliance",
+          "severity": "high",
+          "location": ""
+        },
+        {
+          "id": "FMT001",
+          "name": "Format Compliance",
+          "severity": "high",
+          "location": ""
+        }
+      ],
+      "probes": [
+        {
+          "label": "Ungrounded: directory revenue depends on advertising",
+          "before": true,
+          "after": true
+        },
+        {
+          "label": "Ungrounded: advertising and visibility",
+          "before": true,
+          "after": true
+        }
+      ],
+      "metrics_before": {
+        "words": 405,
+        "sentences": 31,
+        "avg_sentence_words": 13.1,
+        "exclamations": 0,
+        "questions": 2,
+        "emoji": 0,
+        "tells_effective": 5,
+        "banned_hits": [],
+        "preferred_used": [
+          "delivery partners",
+          "restaurant partners",
+          "Eternal Limited"
+        ],
+        "doc_facts_used": [
+          "Foodiebay",
+          "979 million",
+          "Eternal Limited",
+          "Blinkit",
+          "Deepinder Goyal"
+        ],
+        "numbers_not_in_brand_doc": []
+      },
+      "metrics_after": {
+        "words": 405,
+        "sentences": 31,
+        "avg_sentence_words": 13.1,
+        "exclamations": 0,
+        "questions": 2,
+        "emoji": 0,
+        "tells_effective": 5,
+        "banned_hits": [],
+        "preferred_used": [
+          "delivery partners",
+          "restaurant partners",
+          "Eternal Limited"
+        ],
+        "doc_facts_used": [
+          "Foodiebay",
+          "979 million",
+          "Eternal Limited",
+          "Blinkit",
+          "Deepinder Goyal"
+        ],
+        "numbers_not_in_brand_doc": []
+      },
+      "tokens": 11602,
+      "calls": 6,
+      "providers": [
+        "deepseek-chat via https://api.deepseek.com"
+      ],
+      "secs": 21.0
+    }
+  ],
+  "qa_probe": [
+    {
+      "label": "Step 5 text, repeat 1",
+      "passed": false,
+      "overall": 87,
+      "grounding": 92,
+      "brand": 82,
+      "flags": [
+        "fabricated_metric: '979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners' — these figures appear in the verified profile, but the post labels them 'FY2025–26 annual-report materials' while the profile states they describe the financial year ended 31 March 2026 (FY2026); the fiscal-year label is inconsistent and should be corrected to FY2026.",
+        "brandScore: The post omits the brand purpose statement 'Better food for more people' from the key messages to check; it is not required but its absence weakens alignment with the stated key messages.",
+        "clarityScore: 'The scale that followed is documented in FY2025–26 annual-report materials' — the fiscal-year reference is ambiguous and conflicts with the profile's FY2026 designation; specify 'FY2026 (year ended 31 March 2026)'.",
+        "overused_word: \"delivery\" (5×)"
+      ]
+    },
+    {
+      "label": "Step 5 text, repeat 2",
+      "passed": true,
+      "overall": 87,
+      "grounding": 92,
+      "brand": 82,
+      "flags": [
+        "brandScore: Key message 'Better food for more people' is absent from the post; only 'Operations are part of the product' is reflected.",
+        "clarityScore: 'FY2025–26 annual-report materials' is ambiguous; the verified source states these are FY2026 metrics for the year ended 31 March 2026, so the fiscal year label should be stated as FY2026.",
+        "consistencyScore: The post says 'Zomato Limited became Eternal Limited in March 2025' but does not explicitly state that Zomato remains the consumer brand of the listed parent Eternal Limited, risking conflation for readers unfamiliar with the structure.",
+        "overused_word: \"delivery\" (5×)"
+      ]
+    },
+    {
+      "label": "Step 5 text, repeat 3",
+      "passed": false,
+      "overall": 87,
+      "grounding": 92,
+      "brand": 82,
+      "flags": [
+        "fabricated_metric: '979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners' — the post labels these 'FY2025–26 annual-report materials' but the verified profile states these are FY2026 metrics (year ended 31 March 2026), so the fiscal-year label is inaccurate.",
+        "clarity: 'The scale that followed is documented in FY2025–26 annual-report materials' — the fiscal year is stated, but the phrasing 'FY2025–26' is ambiguous and does not match the profile's 'FY2026' designation.",
+        "overused_word: \"delivery\" (5×)"
+      ]
+    },
+    {
+      "label": "Serious draft (has ungrounded advertising claim)",
+      "passed": true,
+      "overall": 83,
+      "grounding": 92,
+      "brand": 82,
+      "flags": [
+        "structural gap: missing META DESCRIPTION required by the blog post format",
+        "platform length: 401 words, below the 500+ word requirement for this format",
+        "clarity: 'FY2025–26 annual-report materials' is awkward and could be read as a fiscal year label; the metrics are for FY2026 (year ended 31 March 2026), so state 'FY2026' explicitly",
+        "consistency: the piece says 'Zomato remains the consumer brand; the listed parent, Eternal Limited, also holds Blinkit, District and Hyperpure' — accurate, but the preceding sentence 'Those figures describe the year ended 31 March 2026' could be misread as group-level; clarify that the metrics are Zomato food-delivery metrics",
+        "overused_word: \"delivery\" (8×)",
+        "overused_word: \"restaurant\" (5×)",
+        "overused_word: \"partners\" (5×)",
+        "format: it is 401 words; the format needs 500-more",
+        "format: it is missing the part(s) this format needs: META DESCRIPTION"
+      ]
+    },
+    {
+      "label": "Seeded draft BEFORE rule engine (synthetic)",
+      "passed": false,
+      "overall": 50,
+      "grounding": 15,
+      "brand": 42,
+      "flags": [
+        "banned phrase: 'delivery boys' appears in 'I personally trained every one of our delivery boys'",
+        "banned phrase: 'game-changing' appears in 'it's a game-changing platform'",
+        "banned phrase: 'disrupt' appears in 'will disrupt how India eats'",
+        "banned phrase: 'unbeatable' appears in 'Our unbeatable network speaks for itself'",
+        "fabricated_experience: 'As a founder who spent 12 years building delivery fleets, I personally trained every one of our delivery boys.' — no such experience in verified profile",
+        "fabricated_metric: 'In 2019, Zomato served 3.2 billion orders across 47 countries.' — not in brand document; contradicts verified FY2026 figure of 979 million orders",
+        "fabricated_metric: '979 million food-delivery orders, 24.3 million average monthly transacting customers, 330,000 average monthly active restaurant partners, 552,000 average monthly active delivery partners' — figures are in brand document but fiscal year is misstated as 'FY2025–26' instead of FY2026 (year ended 31 March 2026)",
+        "compliance violation: 'Eternal Limited is the best investment in Indian food-tech, and investors should buy the stock now.' — investment advice, prohibited",
+        "compliance violation: conflates Zomato and Eternal Limited in the investment advice sentence",
+        "platform issue: 366 words exceeds the 300-word limit for LinkedIn Post",
+        "unsupported vague claim: 'Our unbeatable network speaks for itself' — vague and banned",
+        "structural gap: investment advice sentence is unrelated to the founder-lesson thesis and breaks flow",
+        "cta issue: two competing CTAs — 'Which adjacent problem is your current product earning the right to solve?' and the investment advice — dilutes focus",
+        "banned_phrase: \"delivery boys\"",
+        "banned_phrase: \"game-changing\"",
+        "banned_phrase: \"disrupt\"",
+        "banned_phrase: \"unbeatable\"",
+        "overused_word: \"delivery\" (7×)",
+        "overused_word: \"zomato\" (5×)",
+        "format: it is 366 words; the limit is 300"
+      ]
+    },
+    {
+      "label": "Seeded draft AFTER rule engine",
+      "passed": true,
+      "overall": 87,
+      "grounding": 95,
+      "brand": 82,
+      "flags": [
+        "banned phrase: 'delivery boys' not present, but 'delivery partners' used correctly; no banned phrases found",
+        "word repetition: 'delivery' appears 8 times, 'partners' 5 times, 'brand' 4 times — acceptable but monitor",
+        "sentence length: 'A delivery marketplace inherits every failure point: prep times, delivery partner supply, routing, weather, refunds, support.' — 17 words, fine; no sentences over 35 words",
+        "vague claim: 'The scale that followed is documented in FY2025–26 annual-report materials' — source is named but not linked; acceptable for LinkedIn but could be more precise",
+        "minor inconsistency: 'FY2025–26' vs 'FY2026' — the post uses 'FY2025–26' while the profile uses 'FY2026' for the same period; clarify fiscal year notation",
+        "key message check: 'Better food for more people' is not explicitly stated in the post; it is implied but not quoted — consider adding for brand alignment",
+        "key message check: 'Operations are part of the product' is well articulated ('Operations became part of the product surface') — good",
+        "overused_word: \"delivery\" (6×)"
+      ]
+    }
+  ]
+}
