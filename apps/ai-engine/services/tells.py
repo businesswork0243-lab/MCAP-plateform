@@ -66,7 +66,9 @@ class Pattern:
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+# A sentence that ends inside a closing quote ("...of blockchain." That's...) is
+# still a sentence end; without the second branch the next sentence was glued on.
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+|(?<=[.!?][\"”’])\s+")
 _CODE_SPAN = re.compile(r"`[^`]*`|```.*?```", re.S)
 
 
@@ -378,6 +380,11 @@ _LINKERS = frozenset(
     "which here there such however while when after before also again meanwhile otherwise therefore "
     "thus hence same another other next first second third finally".split()
 )
+# Words that point back when they appear near the start of a sentence, not only first.
+_POINTERS = frozenset(
+    "this that these those it its they them their each both same such other another one most".split()
+)
+_POINTER_WINDOW = 5
 
 
 def _prose_sentences(text: str) -> list[tuple[int, int, str, int]]:
@@ -466,9 +473,14 @@ def _find_unconnected_sentences(text: str):
         if not window:
             continue          # a paragraph break is a deliberate shift
         pairs += 1
-        first_word = re.match(r"[\w']+", cur[2].lower())
+        opening = re.findall(r"[\w']+", cur[2].lower())[:_POINTER_WINDOW]
         stems = _stems(cur[2])
-        if (first_word and first_word.group(0) in _LINKERS) or any(stems & _stems(w[2]) for w in window):
+        # "Fix that one", "You will find the same cause": the pointer is not the
+        # first word, but the sentence still leans on the one before it.
+        points_back = bool(opening) and (
+            opening[0] in _LINKERS or any(w in _POINTERS for w in opening)
+        )
+        if points_back or any(stems & _stems(w[2]) for w in window):
             continue
         loose.append(cur)
     if pairs < _MIN_COHESION_PAIRS or (pairs - len(loose)) / pairs >= _COHESION_FLOOR:
@@ -477,6 +489,106 @@ def _find_unconnected_sentences(text: str):
     yield first[0], first[0] + len(first[2]), (
         f"{len(loose)} of {pairs} sentences share no word with the two before them and do not point back"
     )
+
+
+# ─── Quotable lines and late address ──────────────────────────────────────────
+# "That's a different dream wearing the same vocabulary." is the line a reviewer
+# circled in a generated post: eight words, no fact, a metaphor standing where the
+# argument should be, and it closes the paragraph the way a slogan would. The same
+# post spoke about "a permissioned chain" and "a fintech" for three paragraphs and
+# only said "you" in the last two, so the reader was being lectured, not addressed.
+
+_VERDICT_FRAME = re.compile(r"(?i)^(?:that|this|it)(?:['’]s| is)\s+")
+_VERDICT_SHAPE = re.compile(
+    r"(?i)^(?:that|this|it)(?:['’]s| is)\s+(?:a|an|the)\s+"
+    r"(?:(?:entirely|completely|very|whole)\s+)?(?:different|new|old|same|other|whole other)\s+\w+"
+)
+_FIGURE = re.compile(
+    r"(?i)\b(?:wearing|dressed (?:up )?(?:as|in)|disguised as|wrapped in|repackaged as|rebranded as|"
+    r"in (?:a |the )?(?:costume|disguise|trench ?coat)|"
+    r"in (?:a |the )?(?:new|different|fresh) (?:coat|clothes|skin|packaging|wrapper|costume|dress|jacket|suit|hat|mask|paint))\b"
+)
+_SWAP_SHAPE = re.compile(r"(?i)^(?:same|old|new)\s+\w+,\s+(?:different|new|old|same)\s+\w+")
+_PITHY_WORDS = 14
+_VERDICT_WORDS = 9
+_KICKER_WORDS = 8
+_KICKER_LEAD = 4
+_MIN_KICKER_PARAGRAPHS = 4
+_MIN_OPENING_ADDRESS_WORDS = 120
+_IMPERATIVE_OPENERS = re.compile(
+    r"(?i)^(?:look at|think (?:about|of)|ask yourself|imagine|picture|consider|notice|remember|"
+    r"try|take a look|let['’]?s|say you|suppose|ever )\b"
+)
+
+
+def _is_figurative_verdict(sentence: str, words: int) -> bool:
+    if words > _PITHY_WORDS:
+        return False
+    if _SWAP_SHAPE.match(sentence):
+        return True
+    return bool(_VERDICT_FRAME.match(sentence) and _FIGURE.search(sentence))
+
+
+def _find_pithy_verdicts(text: str):
+    """A short sentence that names a metaphor in place of making a claim."""
+    for start, _, sentence, words in _prose_sentences(text):
+        if _is_figurative_verdict(sentence, words):
+            yield start, start + len(sentence), sentence[:90]
+
+
+def _find_bare_verdicts(text: str):
+    """"That's a different problem." - a short ruling with nothing behind it."""
+    for start, _, sentence, words in _prose_sentences(text):
+        if words <= _VERDICT_WORDS and _VERDICT_SHAPE.match(sentence) and not _is_figurative_verdict(sentence, words):
+            yield start, start + len(sentence), sentence[:90]
+
+
+def _find_paragraph_kickers(text: str):
+    """Paragraphs that end on a short line after a long one, again and again.
+
+    One is a writing choice. The tell is the habit: every paragraph landing its
+    point as a quotable closer. A closer that carries a figure or a name is a fact
+    landing, not a flourish, so those are left alone.
+    """
+    sentences = _prose_sentences(text)
+    by_paragraph: dict[int, list] = {}
+    for item in sentences:
+        by_paragraph.setdefault(item[1], []).append(item)
+    if len(by_paragraph) < _MIN_KICKER_PARAGRAPHS:
+        return
+    for items in by_paragraph.values():
+        if len(items) < 2:
+            continue
+        last, before = items[-1], items[-2]
+        if last[3] > _KICKER_WORDS or before[3] < last[3] + _KICKER_LEAD:
+            continue
+        if re.search(r"\d", last[2]) or re.search(r"(?<=\s)[A-Z][a-z]+", last[2]):
+            continue
+        if _is_figurative_verdict(last[2], last[3]):
+            continue          # already reported, once, by TELL38
+        yield last[0], last[0] + len(last[2]), last[2][:90]
+
+
+def _addresses_reader(sentence: str) -> bool:
+    return bool(_YOU.search(sentence) or _IMPERATIVE_OPENERS.match(sentence))
+
+
+def _find_late_address(text: str):
+    """The opening paragraph speaks about a topic, not to a person."""
+    sentences = _prose_sentences(text)
+    if sum(s[3] for s in sentences) < _MIN_OPENING_ADDRESS_WORDS:
+        return
+    paragraphs = sorted({s[1] for s in sentences})
+    if len(paragraphs) < 3:
+        return
+    opening = [s for s in sentences if s[1] == paragraphs[0]]
+    if any(_addresses_reader(s[2]) for s in opening):
+        return
+    later = next((i for i, p in enumerate(paragraphs[1:], start=2)
+                  if any(_addresses_reader(s[2]) for s in sentences if s[1] == p)), None)
+    first = opening[0]
+    where = f"first reached in paragraph {later}" if later else "never reached"
+    yield first[0], first[0] + len(first[2]), f"the opening paragraph never speaks to the reader ({where})"
 
 
 # ─── The taxonomy ─────────────────────────────────────────────────────────────
@@ -799,6 +911,22 @@ PATTERNS: list[Pattern] = [
     Pattern(
         "TELL37", "37", "Sentences that do not connect", WEAK,
         finder=_find_unconnected_sentences, solo_threshold=1,
+    ),
+    Pattern(
+        "TELL38", "38", "Quotable metaphor in place of a claim", STRONG,
+        finder=_find_pithy_verdicts,
+    ),
+    Pattern(
+        "TELL39", "39", "Short ruling with nothing behind it", WEAK,
+        finder=_find_bare_verdicts, solo_threshold=2,
+    ),
+    Pattern(
+        "TELL40", "40", "Paragraphs that end on a quotable closer", WEAK,
+        finder=_find_paragraph_kickers, solo_threshold=2,
+    ),
+    Pattern(
+        "TELL41", "41", "Opening that does not speak to the reader", WEAK,
+        finder=_find_late_address, solo_threshold=1,
     ),
 ]
 

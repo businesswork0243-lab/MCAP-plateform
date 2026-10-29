@@ -1,26 +1,28 @@
 {
   "files": 3,
   "words": 491,
-  "effective_tells": 15,
-  "tells_per_100_words": 3.055,
+  "effective_tells": 17,
+  "tells_per_100_words": 3.462,
   "by_pattern": {
     "TELL06": 5,
     "TELL08": 7,
     "TELL34": 1,
     "TELL35": 1,
-    "TELL36": 1
+    "TELL36": 1,
+    "TELL41": 2
   },
   "per_file": [
     {
       "file": "generated/beginner-react-story-linkedin.txt",
       "words": 194,
-      "effective": 3,
+      "effective": 4,
       "strong": 0,
-      "weak": 3,
-      "per_100_words": 1.55,
+      "weak": 4,
+      "per_100_words": 2.06,
       "patterns": [
         "TELL06",
-        "TELL08"
+        "TELL08",
+        "TELL41"
       ],
       "residue": []
     },
@@ -40,16 +42,17 @@
     {
       "file": "generated/institutional-authority-thesis-linkedin.txt",
       "words": 178,
-      "effective": 7,
+      "effective": 8,
       "strong": 0,
-      "weak": 7,
-      "per_100_words": 3.93,
+      "weak": 8,
+      "per_100_words": 4.49,
       "patterns": [
         "TELL06",
         "TELL08",
         "TELL34",
         "TELL35",
-        "TELL36"
+        "TELL36",
+        "TELL41"
       ],
       "residue": []
     }

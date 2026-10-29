@@ -17,7 +17,7 @@ pip install -r requirements.txt pytest
 python -m pytest tests/ -q
 ```
 
-Expected: `244 passed`, in about ten seconds.
+Expected: `257 passed`, in about ten seconds.
 
 ## 2. The corpus density
 
@@ -25,7 +25,7 @@ Expected: `244 passed`, in about ten seconds.
 python scripts/tell_score.py eval/corpus
 ```
 
-Expected: `TOTAL 491 15 3.06` — 3.06 tells per 100 words across 491 words of
+Expected: `TOTAL 491 17 3.46` — 3.46 tells per 100 words across 491 words of
 real pipeline output. All three of those samples passed every quality check the
 product had before this work, which is the point.
 
@@ -34,11 +34,18 @@ and sentence cohesion were added (TELL34 to TELL37). The twelve original tells
 are unchanged; the three extra are the new detectors finding something in the same
 frozen samples, so the baseline was re-frozen on purpose with `--save-baseline`.
 
+It was re-frozen a second time, 3.06 to 3.46, when TELL38 to TELL41 (quotable
+metaphors, short rulings, paragraphs that end on a closer, an opening that never
+speaks to the reader) were added. The two extra hits are both TELL41 and both are
+correct: one corpus piece opens "I learned more from three React projects..." and
+the other "A pension fund settles a bond trade...", and neither addresses the
+reader. TELL38 to TELL40 found nothing in the three samples.
+
 ```bash
 python scripts/tell_score.py eval/corpus --check
 ```
 
-Expected: `OK: 2.44 per 100 words, baseline 2.44`, exit code 0. This is the
+Expected: `OK: 3.46 per 100 words, baseline 3.46`, exit code 0. This is the
 command wired into CI, and it fails a release when density rises more than 15%
 above the frozen baseline.
 
@@ -96,6 +103,25 @@ document. Both are heuristics with thresholds set by judgement rather than
 measurement — if a piece you rate highly scores badly, say so.
 
 `docs/PATTERNS.md` lists all 22 patterns, where each came from, and the licences.
+
+## 5. Is each rule actually enforced?
+
+```bash
+python scripts/rule_audit.py            # offline, free
+python scripts/rule_audit.py --check    # exit 1 on any gap; the tests run the same check
+python scripts/rule_audit.py --live     # also asks the real model about SR000-SR016
+python scripts/rule_audit.py --text post.txt     # which rules a given post trips
+python scripts/rule_audit.py --rewrite post.txt  # run the engine, show what it fixed
+python scripts/rule_audit.py --write    # save the table to docs/RULE_AUDIT.md
+```
+
+It separates three questions a rule list cannot answer on its own. *Detected*:
+does the validator raise the rule on text that breaks it and stay quiet on clean
+text (`eval/audit/fixtures.py` holds one of each per rule). *Acted on*: what a hit
+costs, `BLOCKS`, `REWRITES` or `REPORT-ONLY`. *Obeyed*: `--rewrite` runs the
+engine with the real model and lists each rule as FIXED, STILL THERE or
+INTRODUCED, which is the only place the answer to "did the AI actually follow
+the rule" comes from. The table is in `docs/RULE_AUDIT.md`.
 
 ## What is still missing
 

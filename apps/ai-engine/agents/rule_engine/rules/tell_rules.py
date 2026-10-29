@@ -52,6 +52,10 @@ TELL_RULE_IDS: dict[str, str] = {
     "TELL35": "SR049",   # Fragment overuse
     "TELL36": "SR050",   # Reader never addressed
     "TELL37": "SR051",   # Sentences that do not connect
+    "TELL38": "SR052",   # Quotable metaphor in place of a claim
+    "TELL39": "SR053",   # Short ruling with nothing behind it
+    "TELL40": "SR054",   # Paragraphs that end on a quotable closer
+    "TELL41": "SR055",   # Opening that does not speak to the reader
 }
 
 # What the writer should do instead. The regeneration agent passes these
@@ -102,6 +106,27 @@ FIXES: dict[str, str] = {
     "TELL35": "Fold the fragments into the sentences around them. Keep a short sentence only where it lands a point the longer ones built.",
     "TELL36": "Speak to the reader. Address them directly with you or your in the opening and once more in the body, where it ties the point to their situation.",
     "TELL37": "Connect each sentence to the one before it: name the thing it refers to, or start from the consequence or the reason, so the reader never has to guess how two lines relate.",
+    "TELL38": "Delete the metaphor and say what it stood for in plain words, with the fact or consequence behind it. 'That's a different dream wearing the same vocabulary' -> say what is different and who it affects.",
+    "TELL39": "Replace the ruling with the reason for it. If you cannot say why it is different, the sentence has no job.",
+    "TELL40": "End the paragraph on its last real point, folded into a longer sentence, not on a short line built to be quoted. Keep at most one such closer in the whole piece.",
+    "TELL41": "Open by speaking to the reader: use you or your in the first paragraph and tie the topic to their situation, instead of describing the subject from the outside.",
+}
+
+# Rules the reviewers named as the reason copy reads as machine-written. Left at
+# the default, a weak pattern is LOW severity: it moves the score by a rounding
+# error and never earns a rewrite on a draft that otherwise passes. These do.
+SEVERITY_OVERRIDES: dict[str, RuleSeverity] = {
+    "TELL07": RuleSeverity.MEDIUM,
+    "TELL25": RuleSeverity.MEDIUM,
+    "TELL26": RuleSeverity.MEDIUM,
+    "TELL29": RuleSeverity.MEDIUM,
+    "TELL34": RuleSeverity.MEDIUM,
+    "TELL35": RuleSeverity.MEDIUM,
+    "TELL36": RuleSeverity.MEDIUM,
+    "TELL37": RuleSeverity.MEDIUM,
+    "TELL39": RuleSeverity.MEDIUM,
+    "TELL40": RuleSeverity.MEDIUM,
+    "TELL41": RuleSeverity.MEDIUM,
 }
 
 # Style rules deliberately weigh less than grounding. A dash is a matter of
@@ -121,18 +146,21 @@ def _build() -> list[Rule]:
             continue
 
         is_strong = pattern.strength == STRONG
+        severity = SEVERITY_OVERRIDES.get(
+            pattern.id, RuleSeverity.MEDIUM if is_strong else RuleSeverity.LOW,
+        )
         rules.append(Rule(
             id=rule_id,
             type=RuleType.STATIC,
             category=RuleCategory.AI_PATTERNS,
-            severity=RuleSeverity.MEDIUM if is_strong else RuleSeverity.LOW,
+            severity=severity,
             name=pattern.name,
             description=(
                 f"Pattern {pattern.number} in the tell taxonomy "
                 f"({'strong' if is_strong else 'weak-alone'})."
             ),
             instruction=FIXES.get(pattern.id, "Rewrite the flagged span."),
-            weight=STRONG_WEIGHT if is_strong else WEAK_WEIGHT,
+            weight=STRONG_WEIGHT if is_strong or severity == RuleSeverity.MEDIUM else WEAK_WEIGHT,
             deterministic=True,
         ))
     return rules

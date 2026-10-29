@@ -22,6 +22,8 @@ WHAT MAKES IT GOOD
 5. Write like a person. Plain words, active verbs, sentences of different lengths. A short sentence is for emphasis and rarely comes twice in a row. Use headings where the structure calls for them and write flowing prose underneath.
 6. Take a position. Hedge only where the evidence really is uncertain, and say once what the uncertainty is.
 7. End on the implication or the next step. Not a summary, not a moral, not a line that echoes the title.
+8. Talk to the reader. Say "you" or "your" in the first paragraph and again in the body, tying each point to their situation. A piece that describes a topic from the outside for three paragraphs and only turns to the reader at the end reads as a lecture.
+9. No quotable lines. Do not end paragraphs on a short polished sentence built to be screenshotted, and never put a metaphor where a claim belongs ("a different dream wearing the same vocabulary"). Say the plain thing and what follows from it. One short closing line in the whole piece is the most, and only if it carries a fact.
 
 EVIDENCE (applies to the world, not only to the author)
 Do not state a statistic, study, survey, named institution, named person, named company, date or dollar figure unless it appears in the context, verified profile facts or brand document you were given. "Researchers at X found..." and "an 80% drop" are inventions when no source gives them, and a reader will take them for fact.
