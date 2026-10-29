@@ -1,11 +1,14 @@
 {
   "files": 3,
   "words": 491,
-  "effective_tells": 12,
-  "tells_per_100_words": 2.444,
+  "effective_tells": 15,
+  "tells_per_100_words": 3.055,
   "by_pattern": {
     "TELL06": 5,
-    "TELL08": 7
+    "TELL08": 7,
+    "TELL34": 1,
+    "TELL35": 1,
+    "TELL36": 1
   },
   "per_file": [
     {
@@ -18,7 +21,8 @@
       "patterns": [
         "TELL06",
         "TELL08"
-      ]
+      ],
+      "residue": []
     },
     {
       "file": "generated/blockchain-scalability-thesis-linkedin.txt",
@@ -30,19 +34,24 @@
       "patterns": [
         "TELL06",
         "TELL08"
-      ]
+      ],
+      "residue": []
     },
     {
       "file": "generated/institutional-authority-thesis-linkedin.txt",
       "words": 178,
-      "effective": 4,
+      "effective": 7,
       "strong": 0,
-      "weak": 4,
-      "per_100_words": 2.25,
+      "weak": 7,
+      "per_100_words": 3.93,
       "patterns": [
         "TELL06",
-        "TELL08"
-      ]
+        "TELL08",
+        "TELL34",
+        "TELL35",
+        "TELL36"
+      ],
+      "residue": []
     }
   ]
 }

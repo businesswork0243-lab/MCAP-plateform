@@ -73,8 +73,8 @@ later for the structure-scoring method in P5. Its 304 features are built for
 
 | File | What it holds |
 |---|---|
-| `apps/ai-engine/services/tells.py` | The 22 detectors and the weak-alone rule |
+| `apps/ai-engine/services/tells.py` | The detectors (the 22 above plus TELL34 to TELL37: short-sentence runs, fragment overuse, reader never addressed, sentences that do not connect) and the weak-alone rule |
 | `apps/ai-engine/services/voice.py` | Rhythm measured from a brand's own document |
 | `apps/ai-engine/services/structure.py` | The six structural behaviours, advisory score |
-| `apps/ai-engine/agents/rule_engine/rules/tell_rules.py` | `SR017`–`SR038`, one per pattern, and the fix text |
+| `apps/ai-engine/agents/rule_engine/rules/tell_rules.py` | `SR017`–`SR051`, one per pattern, and the fix text |
 | `apps/ai-engine/scripts/tell_score.py` | Corpus density, and the CI gate |

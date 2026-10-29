@@ -48,6 +48,10 @@ TELL_RULE_IDS: dict[str, str] = {
     "TELL31": "SR045",   # Overused AI vocabulary
     "TELL32": "SR046",   # Corporate filler words
     "TELL33": "SR047",   # Polished transitions
+    "TELL34": "SR048",   # Run of short sentences
+    "TELL35": "SR049",   # Fragment overuse
+    "TELL36": "SR050",   # Reader never addressed
+    "TELL37": "SR051",   # Sentences that do not connect
 }
 
 # What the writer should do instead. The regeneration agent passes these
@@ -94,6 +98,10 @@ FIXES: dict[str, str] = {
     "TELL31": "Replace the inflated word with the plain one, or with the concrete fact it was standing in for.",
     "TELL32": "Use the plain verb or noun: use, help, build, grow, market, area.",
     "TELL33": "Drop the transition. If the next sentence follows from the last, it does not need announcing.",
+    "TELL34": "Join the run of short sentences into one or two longer ones. Let a sentence carry its reason or its consequence instead of stopping after the claim.",
+    "TELL35": "Fold the fragments into the sentences around them. Keep a short sentence only where it lands a point the longer ones built.",
+    "TELL36": "Speak to the reader. Address them directly with you or your in the opening and once more in the body, where it ties the point to their situation.",
+    "TELL37": "Connect each sentence to the one before it: name the thing it refers to, or start from the consequence or the reason, so the reader never has to guess how two lines relate.",
 }
 
 # Style rules deliberately weigh less than grounding. A dash is a matter of

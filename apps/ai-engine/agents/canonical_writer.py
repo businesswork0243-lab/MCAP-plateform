@@ -1,10 +1,15 @@
 # apps/ai-engine/agents/canonical_writer.py
 """Agent 1 — Canonical Writer: generates the authoritative base document."""
 import logging
+import os
 
 from services.llm import complete
 
 log = logging.getLogger("ai-engine.canonical_writer")
+
+# How much of the brand document the writer is shown. A 15-page report is about
+# 37,000 characters; the old cut at 12,000 hid everything after the first third.
+BRAND_DOC_CHARS = int(os.getenv("BRAND_DOC_CHARS_WRITER", "24000"))
 
 SYSTEM = """You are a senior writer and editor who has spent a career writing pieces people finish and forward.
 Your task is the canonical article: the one piece every other format is later written from. Its quality is the ceiling for everything downstream, so it has to be correct, specific and worth reading.
@@ -290,16 +295,21 @@ Return the full article, nothing else."""
 REVISE_DENSITY = 1.5
 
 
-async def _revise_if_tell_heavy(content: str, max_tokens: int) -> tuple[str, int]:
+async def _revise_if_tell_heavy(
+    content: str, max_tokens: int, brand_rules: str = ""
+) -> tuple[str, int]:
     try:
         from services.tells import tell_report, format_for_prompt
         report = tell_report(content)
         if report["per_100_words"] < REVISE_DENSITY or report["effective_count"] < 4:
             return content, 0
         flagged = format_for_prompt(content, limit=15)
+        # This pass used to see only the draft, so a rewrite could undo the
+        # brand's tone or reintroduce a banned phrase the writer had avoided.
+        rules_block = f"{brand_rules}\n\n" if brand_rules else ""
         revised, tokens = await complete(
             REVISE_SYSTEM,
-            f"FLAGGED SENTENCES:\n{flagged}\n\nARTICLE:\n{content}",
+            f"{rules_block}FLAGGED SENTENCES:\n{flagged}\n\nARTICLE:\n{content}",
             temperature=0.3,
             max_tokens=max_tokens,
         )
@@ -347,6 +357,9 @@ async def run(
     verified_profile_facts: str             = "",
     compliance_notes:      str              = "",
     preferred_terms:       list[str] | None = None,
+    brand_tone:            dict | None      = None,
+    banned_phrases:        list[str] | None = None,
+    voice_source:          str              = "",
 ) -> dict:
 
     if custom_structure_flow and len(custom_structure_flow) > 0:
@@ -392,7 +405,7 @@ async def run(
     # out of verified material and filled the gap with invention.
     brand_doc_block = ""
     if brand_document_context and brand_document_context.strip():
-        trimmed_docs = brand_document_context[:12000]
+        trimmed_docs = brand_document_context[:BRAND_DOC_CHARS]
         brand_doc_block = f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BRAND DOCUMENT GUIDELINES (Base Voice):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -413,8 +426,10 @@ vocabulary, and strategic constraints from the very first draft.
     voice_block = ""
     try:
         from services.voice import measure, describe
-        voice_profile = measure(brand_document_context)
-        described = describe(voice_profile)
+        # Rhythm is read from the document as uploaded. When it was condensed
+        # into a brief, the brief has none of the brand's own sentences.
+        voice_profile = measure(voice_source or brand_document_context)
+        described = describe(voice_profile, brand_tone)
         if described:
             voice_block = f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 {described}
@@ -428,12 +443,20 @@ this piece has its own length and platform.
     # ── Grounding Block ──
     # Names the only permissible source of first-person claims. Without a
     # profile the writer must drop the persona rather than invent one.
+    # The brand document is already in the prompt above, in full up to its
+    # limit. Repeating it here doubled the cost of every call and, with the
+    # limit raised, would have sent up to 48,000 characters of the same text.
     _parts = [
         part.strip()
-        for part in (verified_profile_facts, brand_document_context)
+        for part in (verified_profile_facts,)
         if part and part.strip()
     ]
-    verified = ("\n\n".join(_parts))[:12000]
+    if brand_document_context and brand_document_context.strip():
+        _parts.append(
+            "The BRAND DOCUMENT GUIDELINES above are also verified material: "
+            "first-person claims may rest on what they state."
+        )
+    verified = "\n\n".join(_parts)
 
     if verified:
         grounding_block = f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -478,6 +501,15 @@ Do not construct a persona to carry the argument.
             "PREFERRED TERMINOLOGY (use these exact terms where relevant): "
             + ", ".join(terms[:30])
         )
+    banned = [b.strip() for b in (banned_phrases or []) if isinstance(b, str) and b.strip()]
+    if banned:
+        rules_parts.append(
+            "BANNED PHRASES (never use them; say it plainly): " + ", ".join(banned[:30])
+        )
+    from services.brand_tone import describe as describe_brand_tone
+    tone_text = describe_brand_tone(brand_tone)
+    if tone_text:
+        rules_parts.append(tone_text)
     if rules_parts:
         grounding_block += "\n\n" + "\n\n".join(rules_parts)
 
@@ -519,7 +551,8 @@ Do not construct a persona to carry the argument.
     # Every format is written from this draft, so a habit left in it is
     # inherited thirteen times. Only a clearly tell-heavy draft is revised;
     # one that reads fine costs nothing extra.
-    revised, extra_tokens = await _revise_if_tell_heavy(content, max_tok)
+    revise_rules = "\n\n".join(rules_parts)
+    revised, extra_tokens = await _revise_if_tell_heavy(content, max_tok, revise_rules)
     content = revised
     tokens += extra_tokens
 

@@ -251,6 +251,10 @@ def compile(req: PDLRequest) -> CompiledPromptPackage:
         # Industry vocabulary is the same instruction to the writer: these
         # exact words, where they fit.
         "preferred_terms":     list(dict.fromkeys([*preferred_terms, *industry_vocabulary])),
+        # The brand's own tone and banned phrases. The writer is the stage that
+        # sets the register; leaving them for later edits meant they never did.
+        "brand_tone":          tone_settings,
+        "banned_phrases":      banned_phrases,
     }
 
     # ── Platform instructions ────────────────────────────────────────────────

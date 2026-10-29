@@ -12,6 +12,7 @@ Scoring weights per spec:
   CTA alignment:          5%
 """
 import json
+import os
 import re
 import logging
 from collections import Counter
@@ -124,6 +125,7 @@ SCORE_WEIGHTS = {
     "ctaScore":          0.04,
 }
 
+QA_FACTS_CHARS     = int(os.getenv("BRAND_DOC_CHARS_QA", "12000"))
 PASS_THRESHOLD     = 70   # Overall score
 CRITICAL_MIN_SCORE = 50   # Any dimension below this = flag
 
@@ -296,6 +298,197 @@ def _default_scores() -> dict:
     return {k: 70 for k in SCORE_WEIGHTS}
 
 
+# ─── Metric flag reconciliation ───────────────────────────────────────────────
+
+_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
+_FLAG_QUOTE = re.compile(r"^fabricated_metric:\s*(.*?)(?:\s[—–-]\s|$)", re.S | re.I)
+
+
+def _in_material(number: str, material: str) -> bool:
+    n = number.replace(",", "").rstrip(".")
+    pattern = r"(?<![\d.])" + re.escape(n) + r"(?![\d])"
+    return bool(re.search(pattern, material))
+
+
+def _reconcile_metric_flags(flags: list[str], material: str) -> list[str]:
+    """Keep `fabricated_metric` for numbers the brand material does not contain.
+
+    The label is on the critical list, so one such flag fails the piece whatever
+    its score. The model used it for wording nits too: the same correct draft was
+    failed in three of four runs over "FY2025-26" against "FY2026", a label the
+    brand document itself uses. Whether a figure appears in the material is a
+    lookup, not a judgement, so it is decided here. A flag whose quoted figures
+    all appear in the material becomes a warning about wording.
+    """
+    if not material.strip():
+        return flags
+    norm = material.replace(",", "")
+    out: list[str] = []
+    for flag in flags:
+        m = _FLAG_QUOTE.match(flag.strip()) if flag.lower().lstrip().startswith("fabricated_metric") else None
+        quoted = m.group(1) if m else ""
+        numbers = _NUMBER.findall(quoted)
+        if numbers and all(_in_material(n, norm) for n in numbers):
+            # The model's explanation is dropped: it is the reading that was just
+            # shown to be wrong ("not in the brand document"), and repeating it
+            # beside "the figures appear in the brand material" contradicts it.
+            out.append(
+                f"metric_wording: {quoted.strip()} - the figures appear in the brand material; "
+                "check the label or wording"
+            )
+        else:
+            out.append(flag)
+    return out
+
+
+# ─── Critical-flag triage ─────────────────────────────────────────────────────
+
+# The model's critical flags were an opinion with nothing behind them, and the
+# same clean draft failed three times in four over them: a figure "not in the
+# profile" that was, a phrase the document uses word for word, a banned phrase
+# the flag itself said was absent, a flag ending "so this is supported". A flag
+# can fail a piece only when something other than that one reading stands behind
+# it. The rest become warnings.
+#
+#   fabricated_experience  critical always: invented experience must never ship
+#   banned phrase          critical only if a banned phrase is in the text
+#   fabricated_metric      critical if a quoted figure is missing from the material
+#                          (see _reconcile_metric_flags); otherwise needs the audit
+#   anything else critical critical only if the claim audit, which reads the whole
+#                          document, points at the same sentence
+_CONCESSIONS = (
+    "not a flag", "this is supported", "is supported", "so supported",
+    "none present", "is not used", "not a specific fabricated", "vague but",
+)
+_ALWAYS_CRITICAL = ("fabricated_experience", "content_too_short", "structural_gap")
+_WORD = re.compile(r"[a-z0-9']+")
+
+
+def _flag_subject(flag: str) -> str:
+    body = flag.split(":", 1)[1] if ":" in flag else flag
+    for sep in (" — ", " – ", " - "):
+        if sep in body:
+            body = body.split(sep, 1)[0]
+            break
+    return body.strip(" \"'‘’“”")
+
+
+def _squash(text: str) -> str:
+    text = re.sub(r"[–—]", "-", text.lower())
+    text = re.sub(r"[‘’“”]", "'", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _same_sentence(a: str, b: str) -> bool:
+    wa, wb = set(_WORD.findall(a.lower())), set(_WORD.findall(b.lower()))
+    if not wa or not wb:
+        return False
+    return len(wa & wb) / min(len(wa), len(wb)) >= 0.7
+
+
+def _soften(flag: str, label: str) -> str:
+    return label + ": " + re.sub(r"(?i)fabricat\w*", "flagged", flag.split(":", 1)[-1].strip())
+
+
+def _triage_critical_flags(
+    flags:      list[str],
+    claims:     list[dict] | None,
+    audit_ran:  bool,
+    content:    str = "",
+    banned:     list[str] | None = None,
+    material:   str = "",
+) -> list[str]:
+    """Keep a critical flag only when something besides one model reading backs it."""
+    out: list[str] = []
+    text = content.lower()
+    material_sq = _squash(material)
+    for flag in flags:
+        low = flag.lower()
+        if _count_critical_flags([flag]) == 0:
+            out.append(flag)
+            continue
+        if any(low.lstrip().startswith(lbl) for lbl in _ALWAYS_CRITICAL):
+            out.append(flag)
+            continue
+        if any(c in low for c in _CONCESSIONS):
+            out.append(_soften(flag, "flag_withdrawn"))
+            continue
+        if "banned_phrase" in low or "banned phrase" in low:
+            present = any(b.lower() in text for b in (banned or []) if b)
+            out.append(flag if present else _soften(flag, "flag_withdrawn"))
+            continue
+
+        subject = _flag_subject(flag)
+        if low.startswith("fabricated_metric") and _NUMBER.search(subject):
+            # Reached only when a quoted figure is missing from the material.
+            out.append(flag)
+            continue
+        if len(subject) >= 12 and material_sq and _squash(subject) in material_sq:
+            out.append(_soften(flag, "flag_withdrawn"))   # the document says it word for word
+            continue
+        if not audit_ran:
+            out.append(flag)                              # no second opinion exists
+        elif any(_same_sentence(subject, c["sentence"]) for c in (claims or [])):
+            out.append(flag)
+        else:
+            out.append(_soften(flag, "unconfirmed_claim"))
+    return out
+
+
+# ─── Claim audit ──────────────────────────────────────────────────────────────
+
+# A claim that is plausible and wrong passes every rule that only looks at the
+# draft: "the directory's revenue depends on advertising" is grammatical, on
+# brand and absent from the brand document. Finding it means reading the draft
+# against the whole document, so this gets the document at full length.
+CLAIM_AUDIT_ENABLED = os.getenv("QA_CLAIM_AUDIT", "1") != "0"
+CLAIM_AUDIT_DOC_CHARS = int(os.getenv("QA_CLAIM_AUDIT_DOC_CHARS", "40000"))
+CLAIM_AUDIT_MIN_DOC_CHARS = 400
+
+CLAIM_AUDIT_SYSTEM = (
+    "You compare a draft against a brand document and report claims the document does not support. "
+    "Return JSON only."
+)
+
+CLAIM_AUDIT_TEMPLATE = """BRAND DOCUMENT:
+{document}
+
+DRAFT:
+{content}
+
+List the sentences of the DRAFT that introduce a NEW fact about this brand which the document does not state: \
+an event, a past action, a number, a cause, a motive, a decision, a customer, or a source of revenue. \
+Examples of what to list: "Discovery paid the bills" (a revenue claim the document never makes), \
+"we optimized the menu PDF" (an invented past action), "the directory's revenue depends on advertising" \
+(a revenue model the document never describes).
+
+Do NOT list a sentence that paraphrases, summarises or re-frames what the document states, that draws a \
+conclusion from stated facts, that uses an analogy or emphasis, that gives advice, asks a question or states \
+an opinion, or that reasons about the industry without asserting something new about this brand. \
+A different wording of a stated fact is supported.
+
+List at most 5, the most serious first. Quote each sentence exactly and say in under 20 words what new fact it asserts.
+Return ONLY: {{"unsupported": [{{"sentence": "...", "reason": "..."}}]}}  (an empty list if every claim is supported)"""
+
+
+async def _audit_claims(content: str, document: str) -> tuple[list[dict], int]:
+    """Brand-specific claims in the draft that the document does not support."""
+    raw, tokens = await complete(
+        CLAIM_AUDIT_SYSTEM,
+        CLAIM_AUDIT_TEMPLATE.format(document=document[:CLAIM_AUDIT_DOC_CHARS], content=content[:14000]),
+        temperature=0.0,
+        max_tokens=900,
+    )
+    data = _parse_json_response(raw or "") or {}
+    items = data.get("unsupported") if isinstance(data, dict) else None
+    claims: list[dict] = []
+    for item in items or []:
+        if isinstance(item, dict) and str(item.get("sentence", "")).strip():
+            claims.append({"sentence": str(item["sentence"]).strip()[:300],
+                           "reason": str(item.get("reason", "")).strip()[:200]})
+    return claims[:5], tokens
+
+
 # ─── Agent Entry Point ────────────────────────────────────────────────────────
 
 async def run(
@@ -321,6 +514,10 @@ async def run(
     # QA could score voice and structure but had no way to tell an invented
     # career from a real one.
     profile_facts = (brand.get("document_context") or "").strip()
+    # What the prompt shows may be a condensed brief. Lookups, the claim audit
+    # and the rhythm measurement need the document as uploaded.
+    from services.verified_facts import source_document
+    full_document = source_document(brand).strip()
     identity_bits = [
         f"{label}: {brand.get(key)}"
         for label, key in (
@@ -335,15 +532,19 @@ async def run(
     verified_facts = "\n".join(identity_bits)
     if profile_facts:
         verified_facts = (verified_facts + "\n\n" + profile_facts).strip()
+    # Figure lookups and flag triage use the whole document, not the prompt's excerpt.
+    lookup_material = "\n".join(identity_bits)
+    if full_document:
+        lookup_material = (lookup_material + "\n\n" + full_document).strip()
 
-    _RULE = "-------------------------------------------------------"
+    _RULE ="-------------------------------------------------------"
 
     if verified_facts:
         grounding_context = (
             "VERIFIED PROFILE FACTS (the only support for first-person "
             "claims about the author):\n"
             f"{_RULE}\n"
-            f"{verified_facts[:6000]}\n"
+            f"{verified_facts[:QA_FACTS_CHARS]}\n"
             f"{_RULE}\n"
             "Any claim about the author that is absent above is fabricated. "
             "Flag it and score groundingScore accordingly."
@@ -452,8 +653,41 @@ async def run(
     if format_specs._PLACEHOLDER.search(content):
         local_flags.append("needs_input: replace the bracketed placeholder before publishing")
 
+    # A figure the brand material contains is not fabricated, whatever the
+    # model called it. Checked against the whole document, not the excerpt.
+    llm_flags = _reconcile_metric_flags(scores.get("flags", []), lookup_material)
+
+    # Claims the document does not support, found by reading the draft against
+    # the whole document. Warnings, not failures: they are a model's reading and
+    # a wrong one must not block a correct piece the way the metric flag did.
+    claim_audit = None
+    audit_flags: list[str] = []
+    if CLAIM_AUDIT_ENABLED and len(full_document) >= CLAIM_AUDIT_MIN_DOC_CHARS:
+        try:
+            unsupported, audit_tokens = await _audit_claims(content, full_document)
+            tokens += audit_tokens
+            claim_audit = {"checked": True, "unsupported": unsupported}
+            for c in unsupported:
+                reason = re.sub(r"(?i)fabricat\w*", "unsupported", c["reason"] or "not found in the brand document")
+                audit_flags.append(f"unverified_claim: \"{c['sentence']}\" - {reason}")
+        except Exception as e:  # pragma: no cover - the audit must never fail a run
+            log.warning("QA claim audit skipped (non-fatal): %s", e)
+            claim_audit = {"checked": False, "unsupported": []}
+
+    # Critical flags that contradict themselves, or rest on one reading of a
+    # story with no second opinion, are warnings. Invented experience and
+    # figures missing from the material stay critical.
+    llm_flags = _triage_critical_flags(
+        llm_flags,
+        (claim_audit or {}).get("unsupported"),
+        bool(claim_audit and claim_audit["checked"]),
+        content=content,
+        banned=banned_phrases,
+        material=lookup_material,
+    )
+    llm_flags.extend(audit_flags)
+
     # Merge flags (dedup)
-    llm_flags   = scores.get("flags", [])
     all_flags   = list(dict.fromkeys(llm_flags + local_flags))
 
     # ── Calculate overall score ───────────────────────────────────────────────
@@ -477,7 +711,7 @@ async def run(
 
     try:
         from services.voice import measure, distance
-        brand_voice = measure(profile_facts)
+        brand_voice = measure(full_document)
         voice_report = distance(brand_voice, content)
     except Exception as e:  # pragma: no cover
         log.warning("Voice match unavailable (non-fatal): %s", e)
@@ -515,6 +749,7 @@ async def run(
         "voiceMatch":        (voice_report or {}).get("match"),
         "voiceReport":       voice_report,
         "flags":             all_flags,
+        "claimAudit":        claim_audit,
         "suggestions":       scores.get("suggestions", []),
         "summary":           scores.get("summary", ""),
         "tokensUsed":        tokens,

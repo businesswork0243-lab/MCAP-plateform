@@ -1,5 +1,6 @@
 """LLM abstraction — OpenAI/DeepSeek primary, Claude fallback."""
 import os
+import time
 import asyncio
 import logging
 from tenacity import (
@@ -185,6 +186,53 @@ def _describe(err: Exception | None) -> str:
     if len(text) > 300:
         text = text[:300] + "..."
     return f"{hint} ({text})" if hint else text
+
+
+_PROBE_CACHE: dict = {"at": 0.0, "result": None}
+_PROBE_TTL_SECONDS = 60.0
+
+
+async def probe_providers(force: bool = False) -> dict:
+    """Ping each configured provider with a one-token call and report the result.
+
+    The Anthropic fallback sat out of credit and nothing said so until a primary
+    timeout needed it, at which point rules went unchecked and a run took three
+    iterations longer. A fallback that cannot answer is not a fallback, and this
+    is how an operator finds out before that happens.
+
+    Cached for a minute, since the endpoint that calls it is unauthenticated and
+    each probe is a paid request.
+    """
+    now = time.time()
+    if not force and _PROBE_CACHE["result"] is not None and now - _PROBE_CACHE["at"] < _PROBE_TTL_SECONDS:
+        return _PROBE_CACHE["result"]
+
+    async def ping(name: str, key: str, fn, model: str) -> dict:
+        if not key:
+            return {"configured": False}
+        started = time.time()
+        try:
+            await asyncio.wait_for(fn("Reply with OK.", "OK", 0.0, 5), timeout=20)
+        except Exception as e:
+            return {"configured": True, "ok": False, "model": model,
+                    "error": _describe(e)[:240], "ms": round((time.time() - started) * 1000)}
+        return {"configured": True, "ok": True, "model": model,
+                "ms": round((time.time() - started) * 1000)}
+
+    openai_result, claude_result = await asyncio.gather(
+        ping("openai", OPENAI_KEY, complete_openai, OPENAI_MODEL),
+        ping("claude", ANTHROPIC_KEY, complete_claude, CLAUDE_MODEL),
+    )
+    result = {
+        "primary": _DEFAULT_PREFER,
+        "openai": openai_result,
+        "claude": claude_result,
+        "fallback_usable": (
+            (claude_result.get("ok") if _DEFAULT_PREFER == "openai" else openai_result.get("ok")) is True
+        ),
+    }
+    _PROBE_CACHE.update(at=now, result=result)
+    return result
 
 
 async def complete(

@@ -8,6 +8,7 @@ After:  1 LLM call  = 15-25s
 import uuid
 import logging
 from services.llm import complete
+from services.verified_facts import source_document
 from services.text_cleaner import (
     clean_ai_patterns,
     detect_all_patterns,
@@ -155,6 +156,7 @@ def _build_user_prompt(
     pre_issues:     dict,
     brand_document: str = "",
     platform:       str | None = None,
+    compliance:     str = "",
 ) -> str:
 
     config = INTENSITY_CONFIG.get(intensity, INTENSITY_CONFIG["medium"])
@@ -315,7 +317,7 @@ def _build_user_prompt(
     voice_block = ""
     try:
         from services.voice import measure, describe
-        described = describe(measure(brand_document))
+        described = describe(measure(brand_document), tonality)
         if described:
             voice_block = f"\n━━━ MATCH THIS RHYTHM ━━━\n{described}\n"
     except Exception as e:  # pragma: no cover - never block a run on this
@@ -332,6 +334,14 @@ def _build_user_prompt(
             )
         except Exception as e:  # pragma: no cover - never block a run on this
             log.warning("Format block unavailable (non-fatal): %s", e)
+
+    # An editor that never saw the brand's compliance rules can reword a
+    # compliant sentence into a non-compliant one.
+    if compliance and compliance.strip():
+        format_block += (
+            "\n━━━ BRAND COMPLIANCE (an edit must never break these) ━━━\n"
+            f"{compliance.strip()[:2000]}\n"
+        )
 
     return f"""{intensity_block}
 LANGUAGE: {lang_note}
@@ -414,12 +424,11 @@ async def run(
             language=language,
             brand_phrases=brand_phrases or (brand_data or {}).get("banned_phrases", []),
             pre_issues=pre_issues,
-            brand_document=(
-                (brand_data or {}).get("document_context")
-                or (brand_data or {}).get("doc_context")
-                or ""
-            ),
+            # The document as uploaded: its rhythm is measured here, and a
+            # condensed brief has none of the brand's own sentences in it.
+            brand_document=source_document(brand_data),
             platform=(extra_context or {}).get("platform"),
+            compliance=(brand_data or {}).get("compliance_notes") or "",
         )
 
         humanized, tokens = await complete(
@@ -519,17 +528,19 @@ async def run(
         final_issues  = detect_all_patterns(humanized)
         pre_total     = pre_issues.get("total_issues", 0)
         post_total    = final_issues.get("total_issues", 0)
-        reduction     = round(
-            ((pre_total - post_total) / pre_total * 100)
-            if pre_total > 0 else 100.0, 1
+        # With nothing to remove there is no reduction to report. 100.0 here
+        # read as a perfect result when the pre-scan had found nothing at all.
+        reduction     = (
+            round((pre_total - post_total) / pre_total * 100, 1)
+            if pre_total > 0 else None
         )
     except Exception:
         final_issues = {"total_issues": 0}
         reduction    = 0
 
     log.info(
-        "Humanizer done | tokens=%d | reduction=%.1f%%",
-        total_tokens, reduction,
+        "Humanizer done | tokens=%d | reduction=%s",
+        total_tokens, "n/a" if reduction is None else f"{reduction:.1f}%",
     )
 
     return {

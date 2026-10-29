@@ -180,11 +180,16 @@ async def run(
     must_preserve:   str        = "",
     brief:           dict | None = None,
     voice_target:    str        = "",
+    brand_rules:     str        = "",
 ) -> dict:
     """Write the canonical article's ideas as `target_platform` content."""
     spec = format_specs.get_spec(target_platform)
 
     extra_parts = []
+    if brand_rules and brand_rules.strip():
+        # This pass rewrote every sentence and saw none of the brand's rules,
+        # so a tone or banned phrase set upstream could be lost in the rewrite.
+        extra_parts.append(brand_rules.strip())
     if must_preserve and must_preserve.strip():
         # Compression used to drop strategic framing the user had asked for,
         # because this agent never saw the request.

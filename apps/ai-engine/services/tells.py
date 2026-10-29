@@ -345,6 +345,140 @@ def _find_engagement_bait(text: str):
         yield off, off + len(block), stripped[:90]
 
 
+# ─── Rhythm, address and cohesion ─────────────────────────────────────────────
+# Reviewers of generated brand copy kept naming the same three faults: short
+# crisp lines in a row, a reader who is never spoken to, and sentences that sit
+# next to each other without leaning on each other. None of those is a phrase,
+# so a regex list cannot see them; they are measured from the sentences.
+#
+# All three are WEAK so that a piece has to show the habit before it counts, and
+# thresholds are set so ordinary short-form copy passes. The evaluation corpus
+# (`eval/corpus`) is the check on that.
+
+_PROSE_SKIP = ("#", "-", "*", ">", "|")
+_SHORT_SENTENCE_WORDS = 8
+_FRAGMENT_WORDS = 5
+_SHORT_RUN = 3
+_FRAGMENT_SHARE = 0.25
+_MIN_SENTENCES = 8
+_MIN_ADDRESS_WORDS = 150
+_ADDRESS_PER_100 = 0.4
+_MIN_COHESION_PAIRS = 7
+_COHESION_FLOOR = 0.4
+
+_YOU = re.compile(r"(?i)\b(you|your|yours|you're|you've|you'll|yourself)\b")
+_STOPWORDS = frozenset(
+    "that this with from have been were they them their there which what when where while will would "
+    "could should about after before because into over than then these those some such only also just "
+    "more most much many very each every both other another being does doing done make made like".split()
+)
+# Words that tie a sentence to the one before it without repeating a noun.
+_LINKERS = frozenset(
+    "this that these those it its they them their he she then so but and or yet still instead because "
+    "which here there such however while when after before also again meanwhile otherwise therefore "
+    "thus hence same another other next first second third finally".split()
+)
+
+
+def _prose_sentences(text: str) -> list[tuple[int, int, str, int]]:
+    """(start, paragraph index, sentence, word count) for sentences of real prose.
+
+    Headings, bullets, tables and hashtag blocks are layout, not sentences.
+    """
+    out: list[tuple[int, int, str, int]] = []
+    for p_index, (p_off, block) in enumerate(_paragraphs(text)):
+        stripped = block.strip()
+        if stripped.startswith(_PROSE_SKIP) or re.fullmatch(r"(?:#\w+\s*)+", stripped):
+            continue
+        for s_off, sentence in _sentences(block):
+            words = _word_count(sentence)
+            if words:
+                out.append((p_off + max(s_off, 0), p_index, sentence, words))
+    return out
+
+
+def _find_short_runs(text: str):
+    """Three or more short sentences in a row inside one paragraph."""
+    run: list[tuple[int, int, str, int]] = []
+
+    def flush():
+        if len(run) >= _SHORT_RUN:
+            first, last = run[0], run[-1]
+            yield first[0], last[0] + len(last[2]), f"{len(run)} sentences of {_SHORT_SENTENCE_WORDS} words or fewer in a row"
+
+    for item in _prose_sentences(text):
+        if item[3] <= _SHORT_SENTENCE_WORDS and (not run or run[-1][1] == item[1]):
+            run.append(item)
+            continue
+        yield from flush()
+        run = [item] if item[3] <= _SHORT_SENTENCE_WORDS else []
+    yield from flush()
+
+
+def _find_fragment_overuse(text: str):
+    """A quarter or more of all sentences are five words or fewer."""
+    sentences = _prose_sentences(text)
+    if len(sentences) < _MIN_SENTENCES:
+        return
+    short = [s for s in sentences if s[3] <= _FRAGMENT_WORDS]
+    if len(short) / len(sentences) < _FRAGMENT_SHARE:
+        return
+    first = short[0]
+    yield first[0], first[0] + len(first[2]), (
+        f"{len(short)} of {len(sentences)} sentences are {_FRAGMENT_WORDS} words or fewer"
+    )
+
+
+def _find_reader_never_addressed(text: str):
+    """A long piece that never says "you"."""
+    sentences = _prose_sentences(text)
+    words = sum(s[3] for s in sentences)
+    if words < _MIN_ADDRESS_WORDS:
+        return
+    hits = len(_YOU.findall(" ".join(s[2] for s in sentences)))
+    if hits / words * 100 >= _ADDRESS_PER_100:
+        return
+    first = sentences[0]
+    yield first[0], first[0] + len(first[2]), (
+        f"the reader is addressed {hits} time{'s' if hits != 1 else ''} in {words} words"
+    )
+
+
+def _stems(sentence: str) -> set[str]:
+    return {
+        w[:5] for w in re.findall(r"[a-z]{4,}", sentence.lower())
+        if w not in _STOPWORDS
+    }
+
+
+def _find_unconnected_sentences(text: str):
+    """Sentences that neither share a word with the last two nor point back.
+
+    The window of two is deliberate: prose often skips a beat (a sentence that
+    qualifies the one before the last) and that is still connected. What it
+    flags is the staccato list of separate assertions, each a new subject.
+    """
+    sentences = _prose_sentences(text)
+    pairs, loose = 0, []
+    for i in range(1, len(sentences)):
+        cur = sentences[i]
+        window = [s for s in sentences[max(0, i - 2):i] if s[1] == cur[1]]
+        if not window:
+            continue          # a paragraph break is a deliberate shift
+        pairs += 1
+        first_word = re.match(r"[\w']+", cur[2].lower())
+        stems = _stems(cur[2])
+        if (first_word and first_word.group(0) in _LINKERS) or any(stems & _stems(w[2]) for w in window):
+            continue
+        loose.append(cur)
+    if pairs < _MIN_COHESION_PAIRS or (pairs - len(loose)) / pairs >= _COHESION_FLOOR:
+        return
+    first = loose[0]
+    yield first[0], first[0] + len(first[2]), (
+        f"{len(loose)} of {pairs} sentences share no word with the two before them and do not point back"
+    )
+
+
 # ─── The taxonomy ─────────────────────────────────────────────────────────────
 # Numbers follow the humanizer taxonomy. Pattern 1 (not X but Y) and pattern 12
 # (overused AI words) already live in text_cleaner and humanizer respectively,
@@ -649,6 +783,22 @@ PATTERNS: list[Pattern] = [
             r"as we look ahead)\b,?",
         ],
         solo_threshold=2,
+    ),
+    Pattern(
+        "TELL34", "34", "Run of short sentences", WEAK,
+        finder=_find_short_runs, solo_threshold=2,
+    ),
+    Pattern(
+        "TELL35", "35", "Fragment overuse", WEAK,
+        finder=_find_fragment_overuse, solo_threshold=1,
+    ),
+    Pattern(
+        "TELL36", "36", "Reader never addressed", WEAK,
+        finder=_find_reader_never_addressed, solo_threshold=1,
+    ),
+    Pattern(
+        "TELL37", "37", "Sentences that do not connect", WEAK,
+        finder=_find_unconnected_sentences, solo_threshold=1,
     ),
 ]
 

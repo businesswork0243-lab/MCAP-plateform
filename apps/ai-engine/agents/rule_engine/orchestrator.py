@@ -1,5 +1,6 @@
 # apps/ai-engine/agents/rule_engine/orchestrator.py
 
+import os
 import time
 import uuid
 import logging
@@ -13,10 +14,32 @@ from .agents.static_validator   import (
 from .agents.regeneration_agent import RegenerationAgent
 from .agents.dynamic_rule_gen   import DynamicRuleGeneratorAgent
 from .rules.rule_models         import (
-    RuleEngineResult, ValidationResult, DynamicRuleSet, RuleCategory,
+    RuleEngineResult, ValidationResult, DynamicRuleSet, RuleCategory, RuleSeverity,
 )
 
 log = logging.getLogger("ai-engine.rule_engine.orchestrator")
+
+# A rough draft took 177 s in the loop against a 300 s limit for the whole
+# pipeline. Past this budget the loop stops iterating and returns the best
+# version it has, instead of running into the caller's timeout and returning
+# nothing.
+TIME_BUDGET_SECONDS = float(os.getenv("RULE_ENGINE_TIME_BUDGET_SECONDS", "120"))
+
+# The loop only rewrote below the pass mark, so a draft that scored 94.9 with
+# seven open findings (three forced triads among them) shipped untouched. One
+# surgical pass is now spent on findings of medium severity or worse, even when
+# the piece passes. The best version seen is still the one returned.
+POLISH_ENABLED = os.getenv("RULE_ENGINE_POLISH", "1") != "0"
+POLISH_SEVERITIES = frozenset({RuleSeverity.CRITICAL, RuleSeverity.HIGH, RuleSeverity.MEDIUM})
+
+# CTA settings that ask for a discussion. A closing question is then the
+# requested behaviour, not engagement bait, and the rule must not fight it.
+_DISCUSSION_CTA_WORDS = ("discuss", "comment", "question", "conversation")
+
+
+def cta_invites_discussion(cta: str | None) -> bool:
+    key = str(cta or "").strip().lower().replace(" ", "_").replace("-", "_")
+    return any(word in key for word in _DISCUSSION_CTA_WORDS)
 
 
 class RuleEngineOrchestrator:
@@ -101,6 +124,9 @@ class RuleEngineOrchestrator:
         initial_fn_count = 0
         final_fn_count   = 0
 
+        cta_requested = cta_invites_discussion((extra_context or {}).get("cta"))
+        polished = False
+
         # ── Agent 1 ↔ Agent 2 Loop ────────────────────────────────────────
         validation_result: ValidationResult | None = None
         iteration = 0
@@ -115,6 +141,7 @@ class RuleEngineOrchestrator:
                 dynamic_rules=dynamic_rules.rules,
                 verified_material=verified_material,
                 platform=platform,
+                cta_requested=cta_requested,
             )
 
             if best_result is None or (
@@ -153,10 +180,48 @@ class RuleEngineOrchestrator:
                 fn_count,
             )
 
+            elapsed_s = time.time() - start_time
+
             # ✅ Pass ho gaya — exit
             if validation_result.passed:
+                polishable = [
+                    v for v in validation_result.violations
+                    if v.severity in POLISH_SEVERITIES
+                ]
+                if (
+                    POLISH_ENABLED
+                    and not polished
+                    and polishable
+                    and iteration < MAX_ITERATIONS
+                    and elapsed_s < TIME_BUDGET_SECONDS
+                ):
+                    polished = True
+                    log.info(
+                        "[RuleEngine] Passed at iter %d with %d open finding(s) of "
+                        "medium severity or worse - one polish pass",
+                        iteration, len(polishable),
+                    )
+                    current = await self.regenerator.regenerate(
+                        content=current,
+                        validation_result=validation_result,
+                        dynamic_context=dynamic_context,
+                        iteration=iteration,
+                        platform=platform,
+                    )
+                    continue
                 final_fn_count = fn_count
                 log.info("[RuleEngine] ✅ Passed at iter %d", iteration)
+                break
+
+            # Out of time: keep the best version so far rather than start a
+            # round the caller's timeout would cut off.
+            if elapsed_s >= TIME_BUDGET_SECONDS:
+                final_fn_count = fn_count
+                log.warning(
+                    "[RuleEngine] Time budget of %.0fs spent after iter %d | "
+                    "score=%.1f%% - returning the best version seen",
+                    TIME_BUDGET_SECONDS, iteration, validation_result.score,
+                )
                 break
 
             # ✅ Last iteration — accept karo chahe pass ho ya na ho
@@ -218,7 +283,7 @@ class RuleEngineOrchestrator:
     ) -> dict:
         ctx = {
             "brand_voice":     brand_data.get("voice", ""),
-            "tone":            str(brand_data.get("tone", "")),
+            "tone":            str(brand_data.get("tone_settings") or brand_data.get("tone") or ""),
             "target_audience": brand_data.get("target_audience", ""),
             "industry":        brand_data.get("industry", ""),
             "writing_style":   "",

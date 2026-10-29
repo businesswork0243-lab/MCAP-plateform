@@ -22,7 +22,7 @@ from agents.rule_engine import RuleEngineOrchestrator
 from services.scoring         import score as score_content
 from services.prompt_compiler import PDLRequest, compile as compile_prompt
 from services.pre_generation_validator import validate_and_fix
-from services.verified_facts import build_verified_facts
+from services.verified_facts import build_verified_facts, build_brand_rules, source_document
 
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
@@ -55,8 +55,33 @@ def get_allowed_origins() -> list[str]:
     return origins
 
 
+async def _report_provider_health() -> None:
+    """Say at startup which LLM providers cannot answer.
+
+    The Anthropic fallback sat out of credit for days and nothing said so; the
+    first sign was a primary timeout that had nowhere to go. A configured
+    provider that fails a one-token call is logged as an error, and a missing
+    fallback as a warning, so a deploy shows it before a request does.
+    """
+    try:
+        from services.llm import probe_providers
+        result = await probe_providers(force=True)
+        for name in ("openai", "claude"):
+            info = result.get(name) or {}
+            if info.get("configured") and not info.get("ok"):
+                log.error("LLM provider '%s' is configured but cannot answer: %s", name, info.get("error"))
+        if not result.get("fallback_usable"):
+            log.warning(
+                "No usable fallback LLM provider. A timeout or outage of '%s' will fail requests "
+                "instead of falling back.", result.get("primary"),
+            )
+    except Exception as e:  # pragma: no cover - a health report must never block startup
+        log.warning("Provider health check skipped: %s", e)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    probe_task = None
     try:
         validate_env()
         log.info(
@@ -65,10 +90,16 @@ async def lifespan(app: FastAPI):
             os.getenv("OPENAI_MODEL", "unknown"),
             os.getenv("ENVIRONMENT", "development"),
         )
+        # In the background: the probe makes network calls and must not delay
+        # readiness. LLM_STARTUP_PROBE=0 turns it off.
+        if os.getenv("LLM_STARTUP_PROBE", "1") != "0":
+            probe_task = asyncio.create_task(_report_provider_health())
     except EnvironmentError as e:
         log.critical("Startup failed: %s", e)
         raise
     yield
+    if probe_task and not probe_task.done():
+        probe_task.cancel()
     log.info("MCAP AI Engine shutting down")
 
 
@@ -268,6 +299,13 @@ async def health():
     }
 
 
+@app.get("/health/providers")
+async def health_providers():
+    """Whether each configured LLM provider, the fallback included, can answer."""
+    from services.llm import probe_providers
+    return await probe_providers()
+
+
 # ── Individual Agent Endpoints ────────────────────────────────────────────────
 
 class CanonicalRequest(BaseModel):
@@ -285,6 +323,9 @@ class CanonicalRequest(BaseModel):
 @app.post("/agents/canonical-writer")
 async def run_canonical_writer(req: CanonicalRequest):
     try:
+        # This route accepted a brandProfile and then ignored it, so a draft
+        # requested here knew nothing about the brand it was written for.
+        profile = req.brandProfile.as_dict() if req.brandProfile else None
         result = await run_with_timeout(
             canonical_writer.run(
                 topic=req.topic,
@@ -294,6 +335,12 @@ async def run_canonical_writer(req: CanonicalRequest):
                 perspective=req.perspective,
                 structure=req.structure,
                 cta=req.cta,
+                brand_document_context=(profile or {}).get("document_context", ""),
+                verified_profile_facts=_build_verified_facts(profile),
+                compliance_notes=(profile or {}).get("compliance_notes", ""),
+                preferred_terms=(profile or {}).get("preferred_terms") or [],
+                brand_tone=(profile or {}).get("tone_settings") or {},
+                banned_phrases=(profile or {}).get("banned_phrases") or [],
             )
         )
         pv = await validate_and_fix(
@@ -606,6 +653,14 @@ async def run_full_pipeline(req: FullPipelineRequest):
     """Full 5-agent pipeline with Pre-Gen Validation + Rule Engine."""
 
     async def _pipeline():
+        # A document too long to send whole is condensed once into a brief, so
+        # every agent sees all of it instead of a different leading slice. The
+        # original stays on the profile as `document_full` for the checks that
+        # need it word for word.
+        from services import brand_brief
+        profile_dict = req.brandProfile.as_dict() if req.brandProfile else None
+        profile_dict, brief_tokens = await brand_brief.attach(profile_dict)
+
         pdl = PDLRequest(
             topic=req.topic,
             objective=req.objective,
@@ -624,9 +679,7 @@ async def run_full_pipeline(req: FullPipelineRequest):
             enable_humanization=req.enableHumanization,
             humanization_intensity=req.humanizationIntensity,
             enable_qa=req.enableQA,
-            brand_profile=(
-                req.brandProfile.as_dict() if req.brandProfile else None
-            ),
+            brand_profile=profile_dict,
             seo_enabled=req.seoEnabled,
             seo_settings=req.seoSettings,
             tonality_spectrum=req.tonalitySpectrum,
@@ -639,19 +692,18 @@ async def run_full_pipeline(req: FullPipelineRequest):
             req.topic[:50], req.targetPlatforms, req.writing_structure,
         )
 
-        profile_dict = req.brandProfile.as_dict() if req.brandProfile else None
-
         # ── Brand Document Audit Log (Priority 1) ─────────────────────
         if profile_dict:
             log.info(
                 "Brand profile received | name=%s | has_documents=%s | "
-                "document_count=%s | context_chars=%d",
+                "document_count=%s | context_chars=%d | brief=%s",
                 profile_dict.get("name", "Unknown"),
                 profile_dict.get("has_documents", False),
                 profile_dict.get("document_count", 0),
                 len(profile_dict.get("document_context", "") or ""),
+                "document_full" in profile_dict,
             )
-        total_tokens = 0
+        total_tokens = brief_tokens
 
         # ── Agent 1: Canonical Writer ─────────────────────────────────────
         log.info("→ [1/5] Canonical Writer starting...")
@@ -677,6 +729,9 @@ async def run_full_pipeline(req: FullPipelineRequest):
                 verified_profile_facts=_build_verified_facts(profile_dict),
                 compliance_notes=ci.get("compliance_notes", ""),
                 preferred_terms=ci.get("preferred_terms") or [],
+                brand_tone=ci.get("brand_tone") or {},
+                banned_phrases=ci.get("banned_phrases") or [],
+                voice_source=source_document(profile_dict),
             )
         except Exception as e:
             log.error("Canonical writer FAILED: %s\n%s", e, traceback.format_exc())
@@ -728,10 +783,31 @@ async def run_full_pipeline(req: FullPipelineRequest):
         voice_target = ""
         try:
             from services.voice import measure as _measure_voice, describe as _describe_voice
-            _doc = (profile_dict or {}).get("document_context") or (profile_dict or {}).get("doc_context") or ""
-            voice_target = _describe_voice(_measure_voice(_doc))
+            _doc = source_document(profile_dict)
+            voice_target = _describe_voice(
+                _measure_voice(_doc), (profile_dict or {}).get("tone_settings")
+            )
         except Exception as e:  # pragma: no cover - never block a run on this
             log.warning("Voice target unavailable (non-fatal): %s", e)
+
+        # The requested length and the format's own range can disagree: 350
+        # words asked for a LinkedIn post whose spec is 150-300. The format wins,
+        # and the caller is told, instead of the two instructions pulling the
+        # piece in opposite directions.
+        from services import format_specs as _fmt
+        brand_rules = build_brand_rules(profile_dict)
+        warnings: list[str] = []
+        platform_word_counts: dict[str, Optional[int]] = {}
+        for p in req.targetPlatforms:
+            wanted = pkg.platform_instructions[p]["word_count"]
+            cap = _fmt.get_spec(p).max_words
+            if wanted and cap and wanted > cap:
+                warnings.append(
+                    f"{p}: requested {wanted} words exceeds the format's {cap}-word maximum; "
+                    f"adapted to {cap}."
+                )
+                wanted = cap
+            platform_word_counts[p] = wanted
 
         try:
             platform_results_raw = await asyncio.gather(*[
@@ -739,13 +815,14 @@ async def run_full_pipeline(req: FullPipelineRequest):
                     canonical_draft=canonical_draft,
                     target_platform=p,
                     audience_note=pkg.platform_instructions[p]["audience_note"],
-                    word_count=pkg.platform_instructions[p]["word_count"],
+                    word_count=platform_word_counts[p],
                     seo_enabled=pkg.platform_instructions[p]["seo_enabled"],
                     seo_settings=pkg.platform_instructions[p]["seo_settings"],
                     cta=pkg.platform_instructions[p]["cta"],
                     must_preserve=must_preserve,
                     brief=writing_brief,
                     voice_target=voice_target,
+                    brand_rules=brand_rules,
                 )
                 for p in req.targetPlatforms
             ], return_exceptions=True)
@@ -868,6 +945,7 @@ async def run_full_pipeline(req: FullPipelineRequest):
                         extra_context={
                             "platform": platform,
                             "objective": req.objective,
+                            "cta": req.cta,
                         },
                     )
                     static_val = re_result.static_validation
@@ -969,6 +1047,7 @@ async def run_full_pipeline(req: FullPipelineRequest):
             "canonicalDraft":   canonical_draft,
             "totalTokensUsed":  total_tokens,
             "compiledMetadata": pkg.metadata,
+            "warnings":         warnings,
             "structureUsed":    a1.get("structure"),
             "structureFlow":    a1.get("structureFlow"),
         }

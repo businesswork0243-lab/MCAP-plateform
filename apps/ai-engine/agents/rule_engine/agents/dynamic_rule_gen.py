@@ -108,6 +108,9 @@ IMPORTANT:
 - Each rule must be uniquely checkable
 - Rules must suit the platform in the context. Do not write rules about length, headings or paragraph count unless the request itself sets them, and never ask a short format for what only a long one can show
 - Never mark a rule "critical"; use "high" for the most important
+- Only the brand's banned_phrases are forbidden. A preferred term is something to use, so never write a rule that forbids its ordinary synonyms (for example, do not forbid "restaurants" because "restaurant partners" is preferred)
+- A tone rule must name signs the validator can see in the text (contractions, direct address of the reader, sentence length, formal or casual word choice) and must tell the validator to flag the piece when those signs are absent, not only when they are contradicted
+- When the brand has compliance notes, one rule must check them
 - Return ONLY valid JSON"""
 
         try:
@@ -150,7 +153,13 @@ IMPORTANT:
                 "name":            brand_data.get("name", ""),
                 "industry":        brand_data.get("industry", ""),
                 "voice":           brand_data.get("voice", ""),
-                "tone":            brand_data.get("tone", {}),
+                # The profile stores the sliders as tone_settings. Reading only
+                # `tone` handed the generator an empty dict for every brand,
+                # so its rules were never built from the brand's tone.
+                "tone":            brand_data.get("tone_settings") or brand_data.get("tone", {}),
+                "mission":         brand_data.get("mission_statement") or brand_data.get("mission", ""),
+                "compliance_notes": brand_data.get("compliance_notes", ""),
+                "key_messages":    brand_data.get("key_messages", []),
                 "target_audience": brand_data.get("target_audience", ""),
                 "core_values":     brand_data.get("core_values", []),
                 "stands_for":      brand_data.get("stands_for", []),

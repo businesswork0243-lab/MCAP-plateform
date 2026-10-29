@@ -59,6 +59,35 @@ def _clean(text: str) -> str:
     return text.strip()
 
 
+# Text pulled out of a PDF arrives hard-wrapped, and a table cell wraps over
+# several lines of its own. Measured as it comes, a 15-page brand report read as
+# "paragraphs of 22.8 sentences" and "a 95-word sentence", and the writer was
+# handed those numbers as the brand's voice.
+#
+# Short unpunctuated lines are NOT dropped: in a narrow column they are the
+# first half of a sentence, and dropping them left fragments such as
+# "moderation." that then counted as one-word sentences.
+_MAX_PROSE_SENTENCE_WORDS = 60   # longer is a run of table cells or a list
+
+
+def _reflow(text: str) -> tuple[str, bool]:
+    """Join hard-wrapped lines into running text.
+
+    Returns the text and whether paragraph boundaries can be trusted. They
+    cannot once lines were joined, because the blank lines that marked
+    paragraphs are gone.
+    """
+    blocks = [b for b in _PARAGRAPH_SPLIT.split(text) if b.strip()]
+    lines = [ln for ln in text.split(chr(10)) if ln.strip()]
+    if len(lines) < 3 * max(len(blocks), 1):
+        # Paragraphs already sit on their own lines: nothing to repair.
+        return text, True
+    return (chr(10) * 2).join(
+        " ".join(ln.strip() for ln in block.split(chr(10)) if ln.strip())
+        for block in blocks
+    ), False
+
+
 def _sentences(text: str) -> list[str]:
     return [s.strip() for s in _SENTENCE_SPLIT.split(text) if s.strip()]
 
@@ -82,9 +111,12 @@ def measure(
     if not text or not text.strip():
         return None
 
-    cleaned = _clean(text)
+    cleaned, paragraphs_trusted = _reflow(_clean(text))
     words = _words(cleaned)
-    sentences = _sentences(cleaned)
+    sentences = [
+        sent for sent in _sentences(cleaned)
+        if len(_words(sent)) <= _MAX_PROSE_SENTENCE_WORDS
+    ]
 
     if len(words) < min_words or len(sentences) < min_sentences:
         return None
@@ -119,7 +151,11 @@ def measure(
         "long_share": round(sum(1 for n in lengths if n >= 25) / sentence_total, 2),
 
         # Shape on the page
-        "paragraph_sentences": round(statistics.fmean(para_sentences), 1),
+        # None when the source's paragraph breaks were lost in extraction: an
+        # honest gap beats a number that describes the file format.
+        "paragraph_sentences": (
+            round(statistics.fmean(para_sentences), 1) if paragraphs_trusted else None
+        ),
 
         # Habits, per 100 words so pieces of different lengths compare
         "first_person_per_100": round(
@@ -137,15 +173,21 @@ def measure(
     }
 
 
-def describe(profile: dict | None) -> str:
+def describe(profile: dict | None, tone: dict | None = None) -> str:
     """The profile as a rhythm target a writer can act on.
 
     Phrased as observations about the brand rather than commands, because the
     piece being written is not the document being measured — a target of 18
     words per sentence is a centre of gravity, not a rule for every line.
+
+    `tone` is the brand's slider settings. A document measured as formal must
+    not overrule a casual setting, so habits that contradict the sliders are
+    left out rather than stated as the brand's voice.
     """
     if not profile:
         return ""
+    formality = (tone or {}).get("formality") if isinstance(tone, dict) else None
+    casual = isinstance(formality, (int, float)) and formality <= 3
 
     lines = [
         f"  - Sentences average {profile['sentence_mean']} words "
@@ -176,9 +218,10 @@ def describe(profile: dict | None) -> str:
             "Long, qualified sentences belong here."
         )
 
-    lines.append(
-        f"  - Paragraphs run about {profile['paragraph_sentences']} sentences."
-    )
+    if profile.get("paragraph_sentences") is not None:
+        lines.append(
+            f"  - Paragraphs run about {profile['paragraph_sentences']} sentences."
+        )
 
     fp = profile["first_person_per_100"]
     if fp >= 2.0:
@@ -187,13 +230,15 @@ def describe(profile: dict | None) -> str:
             "the brand document itself states about the brand, and never claim "
             "experience, clients or events it does not state."
         )
-    elif fp <= 0.3:
-        lines.append("  - Avoids first person. Keep the writing impersonal.")
+    # No "avoids first person" line. Whether a piece speaks as "I", "we" or the
+    # brand is the perspective chosen for the request, and a document written
+    # about a brand by someone else is third person by nature, which says nothing
+    # about how the brand speaks. It used to read "keep the writing impersonal".
 
     con = profile["contractions_per_100"]
     if con >= 1.0:
         lines.append(f"  - Uses contractions ({con} per 100 words).")
-    elif con == 0:
+    elif con == 0 and not casual:
         lines.append("  - Never uses contractions. Write them out in full.")
 
     if profile["question_share"] >= 0.08:
@@ -248,18 +293,22 @@ def distance(profile: dict | None, text: str) -> dict | None:
     gaps: dict[str, float] = {}
     shares: list[float] = []
     for key, tolerance in _DISTANCE_TOLERANCE.items():
+        if profile.get(key) is None or draft.get(key) is None:
+            continue
         gap = abs(draft.get(key, 0) - profile.get(key, 0))
         gaps[key] = round(gap, 2)
         # Capped at 1: past the tolerance the measurement is simply unlike the
         # brand, and how much further does not add information.
         shares.append(min(gap / tolerance, 1.0))
 
+    if not shares:
+        return None
     match = round(max(0.0, 100.0 * (1.0 - statistics.fmean(shares))), 1)
 
     # The measurements that pushed the number down, worst first, so the report
     # says what to change rather than only how far off it is.
     worst = sorted(
-        _DISTANCE_TOLERANCE,
+        gaps,
         key=lambda k: gaps[k] / _DISTANCE_TOLERANCE[k],
         reverse=True,
     )

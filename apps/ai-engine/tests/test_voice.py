@@ -105,9 +105,25 @@ def test_description_is_specific_enough_to_act_on():
     assert any(ch.isdigit() for ch in described)
 
 
-def test_impersonal_document_tells_the_writer_to_stay_impersonal():
+def test_impersonal_document_does_not_forbid_first_person():
+    """Person is the request's perspective, not something to infer from a document.
+
+    A report written about a brand by someone else is third person by nature. It
+    used to tell the writer "keep the writing impersonal", which fought a Founder
+    or Brand perspective and a casual tone alike.
+    """
     described = describe(measure(INSTITUTIONAL))
-    assert "impersonal" in described.lower()
+    assert "impersonal" not in described.lower()
+    assert "first person" not in described.lower()
+
+
+def test_casual_tone_overrides_a_document_that_never_uses_contractions():
+    formal = "The committee reviews each proposal in full before it votes on the outcome. " * 24
+    profile = measure(formal)
+    assert profile["contractions_per_100"] == 0
+    assert "Never uses contractions" in describe(profile)
+    assert "Never uses contractions" in describe(profile, {"formality": 8})
+    assert "Never uses contractions" not in describe(profile, {"formality": 2})
 
 
 # ─── Distance ─────────────────────────────────────────────────────────────────

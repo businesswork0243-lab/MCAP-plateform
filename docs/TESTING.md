@@ -17,7 +17,7 @@ pip install -r requirements.txt pytest
 python -m pytest tests/ -q
 ```
 
-Expected: `102 passed`, in about three seconds.
+Expected: `244 passed`, in about ten seconds.
 
 ## 2. The corpus density
 
@@ -25,9 +25,14 @@ Expected: `102 passed`, in about three seconds.
 python scripts/tell_score.py eval/corpus
 ```
 
-Expected: `TOTAL 491 12 2.44` — 2.44 tells per 100 words across 491 words of
+Expected: `TOTAL 491 15 3.06` — 3.06 tells per 100 words across 491 words of
 real pipeline output. All three of those samples passed every quality check the
 product had before this work, which is the point.
+
+The baseline was 12 tells (2.44) until four detectors for rhythm, reader address
+and sentence cohesion were added (TELL34 to TELL37). The twelve original tells
+are unchanged; the three extra are the new detectors finding something in the same
+frozen samples, so the baseline was re-frozen on purpose with `--save-baseline`.
 
 ```bash
 python scripts/tell_score.py eval/corpus --check
@@ -45,9 +50,13 @@ Three things now happen that did not before.
 `WRITING PATTERNS FOUND` block quoting each offending sentence by name, instead
 of a general instruction to sound human.
 
-**The rule engine checks 22 more rules for free.** `SR017`–`SR038` are decided
+**The rule engine checks 26 more rules for free.** `SR017`–`SR051` are decided
 by regex, not by the model, so they add no cost and keep reporting when the
-provider is down. The seventeen LLM-judged rules are unchanged.
+provider is down. The seventeen LLM-judged rules are unchanged. Four of them
+read rhythm rather than phrases: runs of short sentences (`SR048`), fragment
+overuse (`SR049`), a reader who is never addressed (`SR050`) and sentences that
+do not connect (`SR051`). Their thresholds are judgement, not measurement, and
+the human corpus that would calibrate them is still empty.
 
 **The content page shows two advisory scores.** Structure and Voice Match, under
 *Writing Quality*, with the reasons beneath them. Neither can block publishing —

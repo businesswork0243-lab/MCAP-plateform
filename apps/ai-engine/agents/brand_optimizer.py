@@ -1,12 +1,19 @@
 """Agent 3 — Brand Optimizer: injects organizational identity into content."""
 from services.llm import complete
 import logging
+import os
+import re
 
 log = logging.getLogger("ai-engine.brand_optimizer")
 
+# 6,000 characters showed this stage the first sixth of a 15-page brand report.
+DOC_CHARS = int(os.getenv("BRAND_DOC_CHARS_BRAND", "12000"))
+
 SYSTEM = """You are a brand editor. You adjust how a piece sounds so that it is recognisably this brand, and you leave what it says and how it is laid out alone.
 
-Two failures to avoid. The first is adding things: no new claim, figure, name, credential or example. The second is over-editing: if a passage already sounds like the brand, leave it exactly as it is. Rewriting everything to prove you did something flattens the piece and strips out what makes the format work.
+The TONE PROFILE and the VOCABULARY RULES in the request are binding. Read the piece sentence by sentence against them. A sentence whose register conflicts with the profile (too formal for a casual brand, too flat for an energetic one, jargon for a plain-spoken one) is rewritten in the brand's register: change the words, the rhythm and the way it addresses the reader, not what it claims. A sentence that already fits stays exactly as written. If most of the piece conflicts with the profile, most of it will change; if none does, return it unchanged. Do not return a piece that conflicts with the tone profile on the grounds that it is acceptable.
+
+Two limits. Add nothing: no new claim, figure, name, credential or example, and no change to what a sentence says. And do not rewrite for the sake of it: a sentence that fits the brand is left alone, because rewriting everything flattens the piece and strips out what makes the format work.
 
 The output must keep the same format as the input: headings, line breaks, bullet lists, hashtag blocks, tweet separators (---), numbering, SUBJECT lines, stage directions in [brackets], and bracketed placeholders all stay. Length stays within about 10% of the input."""
 
@@ -39,6 +46,8 @@ TONE PROFILE:
   • Technical Depth:{technical}/10  ({technical_label})
   • Enthusiasm:     {enthusiasm}/10
   • Empathy:        {empathy}/10
+  • Humor:          {humor}/10
+  • Storytelling:   {storytelling}/10
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BRAND BELIEFS & CHARACTER
@@ -65,7 +74,7 @@ COMPLIANCE NOTES:
 BRAND ALIGNMENT RULES:
 1. Replace every banned phrase with plain wording that fits the sentence
 2. Use preferred terms where they fit naturally; never force one in
-3. Match the formality and confidence levels in sentence structure and word choice
+3. Match the tone profile in sentence structure and word choice: contractions, direct address of the reader and plain words for a casual profile; full forms and precise terms for a formal one; a concrete moment instead of an abstract claim for a storytelling one
 4. Move sentence length and paragraph size toward the brand's measured rhythm when one is given above
 5. Weave in a key message only where the content already makes that point; never add a point
 6. The content should feel written by a brand that stands for {stands_for_summary} and opposes {stands_against_summary}, in word choice and emphasis only
@@ -162,6 +171,79 @@ def _summarize_list(items: list, limit: int = 3) -> str:
     return ", ".join(str(i) for i in items[:limit])
 
 
+# ─── Tone enforcement ─────────────────────────────────────────────────────────
+
+_NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
+_HASHTAG = re.compile(r"(?<![\w&])#[A-Za-z]\w*")
+
+
+def _safe_rewrite(original: str, rewritten: str, banned: list[str]) -> bool:
+    """A retry is kept only if it changed how the piece sounds and nothing it says."""
+    if not rewritten or not rewritten.strip():
+        return False
+    if {n.rstrip(",") for n in _NUMBER.findall(original)} - {n.rstrip(",") for n in _NUMBER.findall(rewritten)}:
+        return False                                   # a figure was dropped or altered
+    if len(_HASHTAG.findall(original)) != len(_HASHTAG.findall(rewritten)):
+        return False                                   # the format furniture changed
+    ratio = len(rewritten.split()) / max(len(original.split()), 1)
+    if not 0.85 <= ratio <= 1.15:
+        return False
+    low = rewritten.lower()
+    return not any(b.lower() in low for b in banned if b)
+
+
+# The main prompt tells the model to leave a sentence alone when it fits, and a
+# model that has just read that returns a formal draft unchanged even when the
+# brand is casual. The retry is for a piece already measured as out of register,
+# so it asks for the change and says how much.
+RETRY_SYSTEM = """You are a copy editor. The piece you are given reads too formal and too distant for the brand's voice, and has been measured as such. Rewrite it so it sounds the way the brand speaks, as the findings in the request describe.
+
+Change the register of at least a third of the sentences: shorter, plainer words; contractions; speaking to the reader as "you" where it fits. Do this by rewording, never by adding or removing facts.
+
+Hard limits: keep every fact, figure, name, date and hashtag exactly; keep the order of the argument; keep the length within 10%. Add no claim, story or experience. Output only the rewritten piece."""
+
+
+async def _enforce_tone(
+    original: str, result: str, tone: dict, banned: list[str], user_prompt: str, max_tok: int,
+) -> tuple[str, int, list[str]]:
+    from services.brand_tone import gaps, contract, expand
+
+    found = gaps(result, tone)
+    if not found:
+        return result, 0, []
+
+    # Contractions are mechanical and touch no fact, so code applies them.
+    codes = {code for code, _ in found}
+    if "contractions" in codes:
+        result = contract(result)
+    elif "expand" in codes:
+        result = expand(result)
+    found = gaps(result, tone)
+    if not found:
+        return result, 0, []
+
+    # What is left needs judgement (speaking to the reader): one targeted retry.
+    nl = chr(10)
+    rule = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+    retry_prompt = (
+        user_prompt + nl + nl + rule + nl
+        + "YOUR PREVIOUS ATTEMPT DID NOT MEET THE TONE PROFILE" + nl + rule + nl
+        + nl.join(f"- {msg}" for _, msg in found) + nl
+        + "Rewrite the version below to fix this. Change how it sounds, not what it says: keep every fact, "
+        "figure, name, hashtag and the length within 10%." + nl + nl
+        + "VERSION TO REWRITE:" + nl + result
+    )
+    try:
+        retried, tokens = await complete(RETRY_SYSTEM, retry_prompt, temperature=0.6, max_tokens=max_tok)
+    except Exception as e:  # pragma: no cover - the retry must never lose the first result
+        log.warning("Brand optimizer tone retry failed (non-fatal): %s", e)
+        return result, 0, [msg for _, msg in found]
+    retried_gaps = gaps(retried, tone)
+    if _safe_rewrite(original, retried, banned) and len(retried_gaps) < len(found):
+        return retried, tokens, [msg for _, msg in retried_gaps]
+    return result, tokens, [msg for _, msg in found]
+
+
 # ─── Agent Entry Point ────────────────────────────────────────────────────────
 
 async def run(content: str, brand_profile: dict | None, platform: str | None = None) -> dict:
@@ -210,7 +292,7 @@ async def run(content: str, brand_profile: dict | None, platform: str | None = N
     # ── Document Context Block (Priority 2 Fix) ───────────────────────
     doc_block = ""
     if doc_context and doc_context.strip():
-        trimmed = doc_context[:6000]   # Increased from 3000 → 6000 chars
+        trimmed = doc_context[:DOC_CHARS]
 
         doc_block = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -264,7 +346,8 @@ follow the uploaded documents.
     voice_block = ""
     try:
         from services.voice import measure, describe
-        described = describe(measure(doc_context))
+        from services.verified_facts import source_document
+        described = describe(measure(source_document(brand_profile)), tone_settings)
         if described:
             voice_block = (
                 "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + chr(10)
@@ -320,6 +403,8 @@ follow the uploaded documents.
         technical_label=_tone_label(technical, "Simple", "Moderate", "Deep"),
         enthusiasm=enthusiasm,
         empathy=empathy,
+        humor=tone_settings.get("humor", brand_profile.get("tone_humor", 3)),
+        storytelling=tone_settings.get("storytelling", brand_profile.get("tone_storytelling", 5)),
         beliefs_block=_build_beliefs_block(brand_profile),
         stands_for_summary=_summarize_list(stands_for),
         stands_against_summary=_summarize_list(stands_against),
@@ -359,8 +444,19 @@ follow the uploaded documents.
         max_tokens=max_tok,
     )
 
+    # The model is told to leave passages alone and, given a formal draft and a
+    # casual brand, mostly did: the same draft came back unchanged under casual,
+    # formal and extreme-casual settings alike. Register has countable signs, so
+    # they are counted, and a text that contradicts the sliders gets one targeted
+    # retry that names the gap.
+    result, retry_tokens, tone_gaps = await _enforce_tone(
+        content, result, tone_settings, banned_phrases, user_prompt, max_tok,
+    )
+    tokens += retry_tokens
+
     return {
         "content":    result,
         "tokensUsed": tokens,
         "agent":      "brand_optimizer",
+        "toneGaps":   tone_gaps,
     }

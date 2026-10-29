@@ -126,10 +126,14 @@ class StaticValidatorAgent:
         dynamic_rules: list[Rule] | None = None,
         verified_material: str           = "",
         platform:      str | None        = None,
+        cta_requested: bool              = False,
     ) -> ValidationResult:
 
         dynamic_rules = dynamic_rules or []
         self._platform = platform
+        # When the request itself asks for a closing question, SR041 would
+        # penalise exactly what was asked for.
+        self._cta_requested = cta_requested
         word_total = format_specs.word_count(content)
         start         = time.time()
         # What the brand has told us about itself. Without it a grounding rule
@@ -654,6 +658,8 @@ Return ONLY valid JSON"""
             rule_id = TELL_RULE_IDS.get(pid)
             rule = self.tell_rule_map.get(rule_id) if rule_id else None
             if rule is None:
+                continue
+            if rule_id == "SR041" and getattr(self, "_cta_requested", False):
                 continue
 
             # The sentence, not the raw match: several detectors match a
